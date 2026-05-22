@@ -1,0 +1,63 @@
+name: bino_bit_notes
+description: "BiNo - Bit Notes. Eine schnelle, lokale Personal-Capture-App im WhatsApp-Stil."
+publish_to: 'none'
+
+# Phase 1 = 0.1.0. Semantic Versioning: Major.Minor.Patch+BuildNumber
+version: 0.1.0+1
+
+environment:
+  # flutter create erzeugt ^3.11.1; ^3.9.0 reicht (go_router 17 braucht >=3.9.0)
+  sdk: ^3.9.0
+  flutter: ">=3.35.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ─── State Management ──────────────────────────────────────────────────────
+  # flutter_riverpod: Flutter-spezifischer Wrapper um riverpod.
+  # riverpod_annotation: Stellt die @riverpod-Annotation für Code-Gen bereit.
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+
+  # ─── Routing ───────────────────────────────────────────────────────────────
+  # go_router 17.x: StatefulShellRoute für persistente Bottom-Nav mit
+  # unabhängigen Tab-Navigationsstapeln. Breaking Change in 17.0:
+  # ShellRoute-Observer-Benachrichtigung ist jetzt standardmäßig aktiv.
+  go_router: ^14.8.1
+
+  # ─── Datenbank ─────────────────────────────────────────────────────────────
+  # drift: typsicherer SQLite-Wrapper mit FTS5-Unterstützung und reaktiven Streams.
+  # sqlite3: SQLite-Bindings für Dart. Version 2.x nutzt sqlite3_flutter_libs
+  #   als transitive Abhängigkeit für die nativen Android/iOS-Binaries.
+  # drift_flutter: Thin Wrapper, der NativeDatabase mit path_provider verdrahtet
+  #   und die DB auf einem Hintergrund-Isolat öffnet (kein UI-Blocking).
+  drift: ^2.23.1
+  sqlite3: ^2.7.5
+  drift_flutter: ^0.2.4
+
+  # ─── Hilfspakete ───────────────────────────────────────────────────────────
+  # uuid: Dart-native UUID-Generierung (v4), keine nativen Abhängigkeiten.
+  uuid: ^4.5.1
+  # intl: Datums- und Zahlenformatierung (z. B. im EntryCard-Zeitstempel).
+  intl: ^0.20.2
+  # path_provider: wird von drift_flutter zum Auffinden des Dokumenten-
+  # verzeichnisses benötigt.
+  path_provider: ^2.1.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+  # ─── Code-Generierung ──────────────────────────────────────────────────────
+  # build_runner: Orchestriert alle Quell-Generatoren.
+  # Ausführen mit: dart run build_runner build --delete-conflicting-outputs
+  build_runner: ^2.4.15
+  # drift_dev: Generiert Companion-Klassen, Query-Methoden und Migrations-Stubs.
+  drift_dev: ^2.23.1
+  # riverpod_generator: Generiert @riverpod-annotierten Provider-Boilerplate.
+  riverpod_generator: ^2.6.5
+
+flutter:
+  uses-material-design: true

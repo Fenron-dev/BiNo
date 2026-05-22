@@ -1,0 +1,22 @@
+# build.yaml – Konfiguration für dart run build_runner
+#
+# Steuert, welche Build-Generatoren ausgeführt werden und mit welchen Optionen.
+# Wird bei jedem `dart run build_runner build` eingelesen.
+
+targets:
+  $default:
+    builders:
+      # drift_dev: Generiert database.g.dart, *_dao.g.dart und Companion-Klassen.
+      # Muss VOR den Riverpod-Generatoren laufen, da Provider die generierten
+      # Drift-Typen (z.B. Entry, Tag) importieren.
+      drift_dev:
+        options:
+          # named_parameters: Generiert benannte statt positionale Parameter in
+          # DAO-Methoden, was die Aufrufstellen lesbarer macht.
+          named_parameters: true
+
+      # riverpod_generator: Generiert .g.dart-Dateien für @riverpod-Annotationen.
+      riverpod_generator:
+        options:
+          # riverpod_version: 2 = aktuelle stabile API (Notifier/AsyncNotifier).
+          riverpod_version: 2
