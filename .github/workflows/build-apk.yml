@@ -1,0 +1,71 @@
+name: Build Debug APK
+
+on:
+  # Manuell auslösen über GitHub UI (Actions → "Run workflow")
+  workflow_dispatch:
+  # Automatisch bei jedem Push auf main
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    name: Flutter Debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Code auschecken
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Java 17 einrichten (Android Build Tools Voraussetzung)
+      - name: Java 17 einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # 3. Flutter einrichten (stabile Version)
+      - name: Flutter einrichten
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.x'
+          channel: stable
+          cache: true
+
+      # 4. Abhängigkeiten installieren
+      - name: flutter pub get
+        run: flutter pub get
+
+      # 5. Dart-Code generieren (Drift + Riverpod)
+      - name: build_runner (Code-Generierung)
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      # 6. APK bauen
+      # Debug-APK: kein Signing nötig, direkt auf Gerät installierbar.
+      # split-per-abi: erstellt getrennte APKs pro CPU-Architektur (arm64-v8a
+      # ist für Samsung Galaxy S21 FE die richtige Wahl).
+      - name: flutter build apk
+        run: flutter build apk --debug --split-per-abi
+
+      # 7. APK als GitHub-Release veröffentlichen
+      # Der Release wird bei jedem Build überschrieben (prerelease: true).
+      # "latest-debug" ist immer der aktuellste Stand.
+      - name: GitHub Release erstellen
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-debug
+          name: "Aktueller Debug-Build"
+          body: |
+            Automatisch erzeugter Debug-Build vom ${{ github.event.head_commit.message && github.event.head_commit.message || 'manuellen Auslöser' }}.
+
+            **Installation auf Android:**
+            1. APK herunterladen: `app-arm64-v8a-debug.apk` (für Samsung Galaxy S21 FE)
+            2. Auf dem Gerät: *Einstellungen → Apps → Sonderrechte → Unbekannte Apps installieren*
+            3. APK-Datei im Downloads-Ordner antippen
+          prerelease: true
+          # Vorherige Dateien des "latest-debug"-Tags überschreiben.
+          files: |
+            build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
+            build/app/outputs/flutter-apk/app-armeabi-v7a-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
