@@ -23,20 +23,23 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # android-actions/setup-android: akzeptiert alle Android-SDK-Lizenzen,
-      # installiert Build-Tools und NDK. Ohne diesen Schritt schlägt flutter
-      # build apk fehl weil die Lizenzakzeptanz fehlt.
-      - name: Android SDK einrichten + Lizenzen akzeptieren
-        uses: android-actions/setup-android@v3
-
       - name: Flutter einrichten
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Flutter-Diagnose
+      # ubuntu-latest hat Android SDK vorinstalliert unter $ANDROID_HOME.
+      # Lizenzen müssen explizit akzeptiert werden, sonst bricht
+      # flutter build apk mit "Android license status unknown" ab.
+      # '|| true' verhindert Exit-Code 1 bei bereits akzeptierten Lizenzen.
+      - name: Android SDK Lizenzen akzeptieren
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+      - name: Flutter-Diagnose (Troubleshooting)
         run: flutter doctor -v
+        continue-on-error: true
 
       - name: flutter pub get
         run: flutter pub get
@@ -50,15 +53,23 @@ jobs:
       - name: APK-Pfade prüfen
         run: ls -lh build/app/outputs/flutter-apk/
 
+      # Artifact-Upload als Fallback – APK ist auch ohne Release downloadbar.
+      - name: APK als Artifact hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
+          retention-days: 7
+
       - name: GitHub Release erstellen
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest-debug
           name: "Aktueller Debug-Build"
           body: |
-            Automatisch erzeugter Debug-Build.
+            Debug-Build für Samsung Galaxy S21 FE.
 
-            **Installation auf dem Samsung Galaxy S21 FE:**
+            **Installation:**
             1. `app-arm64-v8a-debug.apk` herunterladen
             2. Einstellungen → Apps → Sonderrechte → Unbekannte Apps installieren → erlauben
             3. APK antippen und installieren
