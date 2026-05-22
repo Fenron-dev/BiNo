@@ -29,31 +29,47 @@ jobs:
           channel: stable
           cache: true
 
-      # ubuntu-latest hat Android SDK vorinstalliert unter $ANDROID_HOME.
-      # Lizenzen müssen explizit akzeptiert werden, sonst bricht
-      # flutter build apk mit "Android license status unknown" ab.
-      # '|| true' verhindert Exit-Code 1 bei bereits akzeptierten Lizenzen.
       - name: Android SDK Lizenzen akzeptieren
-        run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-      - name: Flutter-Diagnose (Troubleshooting)
-        run: flutter doctor -v
-        continue-on-error: true
+      # Flutter 3.x benötigt einen spezifischen NDK der oft nicht vorinstalliert ist.
+      # Hier: NDK-Version aus dem Flutter SDK auslesen und installieren falls fehlend.
+      - name: Flutter NDK ermitteln und installieren
+        run: |
+          FLUTTER_ROOT=$(flutter root)
+          echo "Flutter root: $FLUTTER_ROOT"
+
+          # NDK-Version aus Flutter-Gradle-Plugin extrahieren
+          NDK_VER=$(grep -rh 'ndkVersion' "$FLUTTER_ROOT/packages/flutter_tools/" 2>/dev/null \
+            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          echo "Flutter NDK-Version: ${NDK_VER:-nicht gefunden}"
+
+          # Vorinstallierte NDKs anzeigen (Diagnose)
+          echo "=== Vorinstallierte NDKs ==="
+          ls "$ANDROID_HOME/ndk/" 2>/dev/null || echo "Keine NDKs"
+
+          # NDK installieren falls nötig
+          TARGET="${NDK_VER:-27.0.12077973}"
+          if [ ! -d "$ANDROID_HOME/ndk/$TARGET" ]; then
+            echo "Installiere NDK $TARGET ..."
+            yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;$TARGET" 2>&1 | tail -3
+          else
+            echo "NDK $TARGET bereits vorhanden."
+          fi
 
       - name: flutter pub get
         run: flutter pub get
 
-      - name: build_runner (Code-Generierung)
+      - name: build_runner
         run: dart run build_runner build --delete-conflicting-outputs
 
+      # --verbose zeigt den vollständigen Gradle-Output falls der Build scheitert.
       - name: flutter build apk
-        run: flutter build apk --debug --split-per-abi
+        run: flutter build apk --debug --split-per-abi --verbose
 
       - name: APK-Pfade prüfen
         run: ls -lh build/app/outputs/flutter-apk/
 
-      # Artifact-Upload als Fallback – APK ist auch ohne Release downloadbar.
       - name: APK als Artifact hochladen
         uses: actions/upload-artifact@v4
         with:
