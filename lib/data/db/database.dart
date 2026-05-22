@@ -3,7 +3,7 @@
 // ZWECK: Zentrale Drift-Datenbank-Definition. Referenziert alle Tabellen und DAOs,
 //        führt Schema-Migrationen durch und konfiguriert SQLite-PRAGMAs.
 // ABHÄNGIGKEITEN: drift, drift_flutter, alle Tabellen- und DAO-Dateien.
-// PHASE: 1 – Grundgerüst. Neue Tabellen/Migrationen kommen in späteren Phasen.
+// PHASE: 1 – Grundgerüst. Phase 2: AttachmentDao hinzugefügt.
 //
 // WICHTIG: `part 'database.g.dart'` erfordert, dass drift_dev via build_runner
 // ausgeführt wurde. Ohne den generierten Code compiliert diese Datei nicht.
@@ -18,6 +18,7 @@ import 'tables/attachments.dart';
 import 'daos/entry_dao.dart';
 import 'daos/tag_dao.dart';
 import 'daos/container_dao.dart';
+import 'daos/attachment_dao.dart';
 
 // Der `part`-Direktive verweist auf die von drift_dev generierte Datei.
 // Sie enthält die _$AppDatabase-Basisklasse mit allen Query-Methoden.
@@ -45,6 +46,7 @@ part 'database.g.dart';
     EntryDao,
     TagDao,
     ContainerDao,
+    AttachmentDao,
   ],
 )
 class AppDatabase extends _$AppDatabase {

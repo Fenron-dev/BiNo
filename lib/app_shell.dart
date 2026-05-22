@@ -2,13 +2,15 @@
 //
 // ZWECK: Persistente App-Hülle mit BottomAppBar (Navigation) und zentralem FAB.
 //        Alle Tabs teilen diese Hülle – sie selbst ändert sich nicht beim Tab-Wechsel.
-// ABHÄNGIGKEITEN: go_router (StatefulNavigationShell), CaptureSheet.
-// PHASE: 1 – Feed, Projekte, Bereiche + FAB. Phase 4 fügt dynamische Hub-Tabs hinzu.
+// ABHÄNGIGKEITEN: go_router (StatefulNavigationShell), CaptureSheet, AudioCaptureSheet.
+// PHASE: 1 – Feed, Projekte, Bereiche + FAB. Phase 2: Long-Press → AudioCaptureSheet.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import 'features/capture/capture_sheet.dart';
+import 'features/capture/audio_capture_sheet.dart';
 
 /// App-Hülle mit persistenter Bottom-Navigation und zentralem FAB.
 ///
@@ -49,6 +51,24 @@ class AppShell extends StatelessWidget {
     );
   }
 
+  /// Öffnet das Audio-Capture-Sheet (Long-Press auf FAB).
+  void _openAudioCaptureSheet(BuildContext context) {
+    // Haptisches Feedback signalisiert dem Nutzer den Long-Press-Modus.
+    HapticFeedback.mediumImpact();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      // isDismissible: false – Aufnahme soll nicht versehentlich geschlossen werden.
+      isDismissible: false,
+      enableDrag: false,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (_) => const AudioCaptureSheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -60,15 +80,11 @@ class AppShell extends StatelessWidget {
       // GestureDetector wrappet den FAB für Long-Press-Unterstützung.
       // WARUM GestureDetector statt FAB.onLongPress?
       // FloatingActionButton hat in Flutter 3.x kein onLongPress-Parameter.
-      // Phase 2: Long-Press öffnet den Audio-Aufnahme-Modus.
       floatingActionButton: GestureDetector(
-        onLongPress: () {
-          // Phase 2: Haptic-Feedback + Audio-Capture-Sheet öffnen.
-          _openCaptureSheet(context);
-        },
+        onLongPress: () => _openAudioCaptureSheet(context),
         child: FloatingActionButton(
           onPressed: () => _openCaptureSheet(context),
-          tooltip: 'Neue Notiz',
+          tooltip: 'Neue Notiz (Long-Press für Audio)',
           child: const Icon(Icons.add),
         ),
       ),

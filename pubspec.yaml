@@ -44,6 +44,18 @@ dependencies:
   # path_provider: wird von drift_flutter zum Auffinden des Dokumenten-
   # verzeichnisses benötigt.
   path_provider: ^2.1.5
+  # path: Dateipfad-Operationen (join, relative, extension) – genutzt in
+  # AttachmentService und EntryCard für plattformunabhängige Pfadkonstruktion.
+  path: ^1.9.0
+  image_picker: ^1.2.2
+  record: ^6.2.1
+  just_audio: ^0.10.5
+  speech_to_text: ^7.4.0
+  google_mlkit_text_recognition: ^0.15.1
+  google_mlkit_language_id: ^0.13.1
+  receive_sharing_intent: ^1.8.1
+  http: ^1.6.0
+  mime: ^2.0.0
 
 dev_dependencies:
   flutter_test:

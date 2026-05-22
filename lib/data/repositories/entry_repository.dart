@@ -58,6 +58,8 @@ class EntryRepository {
     String? title,
     EntryType type = EntryType.text,
     EntryStatus status = EntryStatus.inbox,
+    String? sourceUrl,
+    String? sourceApp,
   }) async {
     final id = _uuid.v4();
     final now = DateTime.now().toUtc();
@@ -66,7 +68,6 @@ class EntryRepository {
     await _entryDao.attachedDatabase.transaction(() async {
       // Schritt 1: Eintrag speichern.
       // Value() ist der Drift-Wrapper für optionale und explizit gesetzte Felder.
-      // Pflichtfelder von insert() (hier: id) werden direkt übergeben.
       await _entryDao.insertEntry(
         EntriesCompanion.insert(
           id: id,
@@ -76,6 +77,8 @@ class EntryRepository {
           status: Value(status.name),
           createdAt: Value(now),
           updatedAt: Value(now),
+          sourceUrl: Value(sourceUrl),
+          sourceApp: Value(sourceApp),
         ),
       );
 
