@@ -32,29 +32,32 @@ jobs:
       - name: Android SDK Lizenzen akzeptieren
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-      # Flutter 3.x benötigt einen spezifischen NDK der oft nicht vorinstalliert ist.
-      # Hier: NDK-Version aus dem Flutter SDK auslesen und installieren falls fehlend.
+      # 'flutter root' existiert nicht – Flutter-Pfad über 'which flutter' ermitteln.
+      # continue-on-error: true damit ein Skript-Fehler nicht den Build blockiert.
       - name: Flutter NDK ermitteln und installieren
+        continue-on-error: true
         run: |
-          FLUTTER_ROOT=$(flutter root)
+          FLUTTER_BIN=$(which flutter)
+          FLUTTER_ROOT=$(dirname $(dirname "$FLUTTER_BIN"))
           echo "Flutter root: $FLUTTER_ROOT"
 
-          # NDK-Version aus Flutter-Gradle-Plugin extrahieren
-          NDK_VER=$(grep -rh 'ndkVersion' "$FLUTTER_ROOT/packages/flutter_tools/" 2>/dev/null \
+          # NDK-Version aus Flutter-Gradle-Dateien extrahieren
+          NDK_VER=$(find "$FLUTTER_ROOT/packages/flutter_tools" \
+            \( -name "*.gradle" -o -name "*.kt" -o -name "*.groovy" \) 2>/dev/null \
+            | xargs grep -h 'ndkVersion' 2>/dev/null \
             | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-          echo "Flutter NDK-Version: ${NDK_VER:-nicht gefunden}"
 
-          # Vorinstallierte NDKs anzeigen (Diagnose)
           echo "=== Vorinstallierte NDKs ==="
-          ls "$ANDROID_HOME/ndk/" 2>/dev/null || echo "Keine NDKs"
+          ls "$ANDROID_HOME/ndk/" 2>/dev/null || echo "Keine NDKs vorhanden"
 
-          # NDK installieren falls nötig
           TARGET="${NDK_VER:-27.0.12077973}"
+          echo "Ziel-NDK: $TARGET"
+
           if [ ! -d "$ANDROID_HOME/ndk/$TARGET" ]; then
             echo "Installiere NDK $TARGET ..."
-            yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;$TARGET" 2>&1 | tail -3
+            yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;$TARGET" 2>&1 | tail -5
           else
-            echo "NDK $TARGET bereits vorhanden."
+            echo "NDK $TARGET ist bereits vorhanden."
           fi
 
       - name: flutter pub get
