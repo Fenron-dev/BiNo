@@ -51,6 +51,27 @@ class Containers extends Table {
   /// Null für 'project' und 'area'. Bei 'hub': JSON gemäß FilterDefinition-Schema.
   TextColumn get filterJson => text().nullable()();
 
+  // ── Phase 3: Workspace + Smart-Filter (MediaShelf-Muster) ─────────────────
+
+  /// Workspace-Zugehörigkeit.
+  TextColumn get workspaceId =>
+      text().withDefault(const Constant('default'))();
+
+  /// Hierarchie: Null = Root-Container. Ermöglicht verschachtelte Bereiche.
+  TextColumn get parentId => text().nullable()();
+
+  /// Sortierreihenfolge innerhalb desselben Eltern-Containers.
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+
+  /// Smart-Filter: Einträge werden dynamisch per JSON-Regel gesammelt
+  /// statt manuell zugewiesen. Äquivalent zu MediaShelf's Smart Collections.
+  BoolColumn get isSmartFilter =>
+      boolean().withDefault(const Constant(false))();
+
+  /// JSON-Regelset für Smart-Filter (isSmartFilter = true).
+  /// Format: {"logic":"AND","rules":[{"field":"type","op":"=","value":"link"}]}
+  TextColumn get smartFilterQuery => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }

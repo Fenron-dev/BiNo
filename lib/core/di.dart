@@ -90,6 +90,14 @@ final backupServiceProvider = Provider<BackupService>((ref) {
   return BackupService(ref.watch(databaseProvider));
 }, name: 'backupServiceProvider');
 
+// ── Workspace ─────────────────────────────────────────────────────────────
+
+/// Aktiver Workspace-ID. Default: 'default' (wird in Phase 4 via WorkspaceScreen geändert).
+final activeWorkspaceProvider = StateProvider<String>(
+  (ref) => 'default',
+  name: 'activeWorkspaceProvider',
+);
+
 // ── Repositories ──────────────────────────────────────────────────────────
 
 /// EntryRepository – Hauptkoordinator für Eintrags-Logik.

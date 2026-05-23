@@ -10,9 +10,10 @@ import '../../core/di.dart';
 // Entry ist eine von drift_dev generierte Datenklasse, zugänglich über database.dart.
 import '../../data/db/database.dart';
 
-/// Beobachtet alle Einträge als reaktiven Stream.
+/// Beobachtet alle Einträge des aktiven Workspace als reaktiven Stream.
 final feedEntriesProvider = StreamProvider<List<Entry>>((ref) {
-  return ref.watch(entryRepositoryProvider).watchAllEntries();
+  final workspaceId = ref.watch(activeWorkspaceProvider);
+  return ref.watch(entryRepositoryProvider).watchAllEntries(workspaceId);
 }, name: 'feedEntriesProvider');
 
 // ── Suche ─────────────────────────────────────────────────────────────────

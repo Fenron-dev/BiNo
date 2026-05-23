@@ -15,6 +15,9 @@ import 'tables/entries.dart';
 import 'tables/tags.dart';
 import 'tables/containers.dart';
 import 'tables/attachments.dart';
+import 'tables/workspaces.dart';
+import 'tables/property_definitions.dart';
+import 'tables/templates.dart';
 import 'daos/entry_dao.dart';
 import 'daos/tag_dao.dart';
 import 'daos/container_dao.dart';
@@ -41,6 +44,10 @@ part 'database.g.dart';
     Containers,
     EntryContainers,
     Attachments,
+    Workspaces,
+    PropertyDefinitions,
+    EntryProperties,
+    Templates,
   ],
   daos: [
     EntryDao,
@@ -63,7 +70,7 @@ class AppDatabase extends _$AppDatabase {
   // Jede Erhöhung erfordert einen neuen onUpgrade-Block in migration.
   // REGEL: Bestehende Migrationen nie nachträglich ändern – nur neue hinzufügen.
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -145,12 +152,38 @@ class AppDatabase extends _$AppDatabase {
         },
 
         /// onUpgrade: Wird ausgeführt, wenn schemaVersion erhöht wurde.
-        /// Phase 2+ Migrationen werden hier hinzugefügt.
+        /// REGEL: Blöcke nie nachträglich ändern – nur neue if-Blöcke anfügen.
         onUpgrade: (Migrator m, int from, int to) async {
-          // Beispiel für Phase 2 (noch nicht aktiv):
-          // if (from < 2) {
-          //   await m.addColumn(entries, entries.someNewColumn);
-          // }
+          if (from < 2) {
+            // ── Neue Tabellen anlegen ───────────────────────────────────────
+            await m.createTable(workspaces);
+            await m.createTable(propertyDefinitions);
+            await m.createTable(entryProperties);
+            await m.createTable(templates);
+
+            // Standard-Workspace einfügen – alle bestehenden Daten gehören ihm.
+            await customStatement('''
+              INSERT INTO workspaces (id, name, icon, color, is_default, created_at)
+              VALUES ('default', 'Standard', '🏠', '#6750A4', 1,
+                      strftime('%s','now') * 1000)
+            ''');
+
+            // ── Spalten zu entries hinzufügen ───────────────────────────────
+            // withDefault('default') → SQLite setzt alle Bestandszeilen auf 'default'
+            await m.addColumn(entries, entries.workspaceId);
+            await m.addColumn(entries, entries.notes);
+            await m.addColumn(entries, entries.playbackPositionMs);
+
+            // ── Spalten zu tags hinzufügen ──────────────────────────────────
+            await m.addColumn(tags, tags.workspaceId);
+
+            // ── Spalten zu containers hinzufügen ────────────────────────────
+            await m.addColumn(containers, containers.workspaceId);
+            await m.addColumn(containers, containers.parentId);
+            await m.addColumn(containers, containers.sortOrder);
+            await m.addColumn(containers, containers.isSmartFilter);
+            await m.addColumn(containers, containers.smartFilterQuery);
+          }
         },
 
         /// beforeOpen: Wird bei JEDEM App-Start ausgeführt, nach der Migration.

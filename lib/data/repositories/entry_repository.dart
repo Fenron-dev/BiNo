@@ -49,7 +49,8 @@ class EntryRepository {
   /// Der Stream wird von Drift automatisch neu ausgelöst, wenn sich
   /// Einträge in der Datenbank ändern. Riverpod's StreamProvider leitet
   /// diese Änderungen direkt an die UI weiter.
-  Stream<List<Entry>> watchAllEntries() => _entryDao.watchAllEntries();
+  Stream<List<Entry>> watchAllEntries(String workspaceId) =>
+      _entryDao.watchAllEntries(workspaceId);
 
   /// Erstellt einen neuen Eintrag und verknüpft alle im Body enthaltenen Tags.
   ///

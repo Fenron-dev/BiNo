@@ -37,8 +37,9 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
   /// FALSCH! Wir wollen neueste unten.
   /// Lösung: aufsteigend sortieren (älteste als Index 0, neueste als letzter
   /// Index) + reverse:true dreht die Anzeige um → neueste erscheint unten.
-  Stream<List<Entry>> watchAllEntries() {
+  Stream<List<Entry>> watchAllEntries(String workspaceId) {
     return (select(entries)
+          ..where((t) => t.workspaceId.equals(workspaceId))
           ..orderBy([
             // Angepinnte Einträge erscheinen oben (true > false → DESC).
             (t) => OrderingTerm(

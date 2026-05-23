@@ -175,6 +175,37 @@ class $EntriesTable extends Entries with TableInfo<$EntriesTable, Entry> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _workspaceIdMeta = const VerificationMeta(
+    'workspaceId',
+  );
+  @override
+  late final GeneratedColumn<String> workspaceId = GeneratedColumn<String>(
+    'workspace_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('default'),
+  );
+  static const VerificationMeta _notesMeta = const VerificationMeta('notes');
+  @override
+  late final GeneratedColumn<String> notes = GeneratedColumn<String>(
+    'notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _playbackPositionMsMeta =
+      const VerificationMeta('playbackPositionMs');
+  @override
+  late final GeneratedColumn<int> playbackPositionMs = GeneratedColumn<int>(
+    'playback_position_ms',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -193,6 +224,9 @@ class $EntriesTable extends Entries with TableInfo<$EntriesTable, Entry> {
     embedding,
     aiEnrichedAt,
     lang,
+    workspaceId,
+    notes,
+    playbackPositionMs,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -304,6 +338,30 @@ class $EntriesTable extends Entries with TableInfo<$EntriesTable, Entry> {
         lang.isAcceptableOrUnknown(data['lang']!, _langMeta),
       );
     }
+    if (data.containsKey('workspace_id')) {
+      context.handle(
+        _workspaceIdMeta,
+        workspaceId.isAcceptableOrUnknown(
+          data['workspace_id']!,
+          _workspaceIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('notes')) {
+      context.handle(
+        _notesMeta,
+        notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
+      );
+    }
+    if (data.containsKey('playback_position_ms')) {
+      context.handle(
+        _playbackPositionMsMeta,
+        playbackPositionMs.isAcceptableOrUnknown(
+          data['playback_position_ms']!,
+          _playbackPositionMsMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -377,6 +435,18 @@ class $EntriesTable extends Entries with TableInfo<$EntriesTable, Entry> {
         DriftSqlType.string,
         data['${effectivePrefix}lang'],
       ),
+      workspaceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}workspace_id'],
+      )!,
+      notes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}notes'],
+      ),
+      playbackPositionMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}playback_position_ms'],
+      ),
     );
   }
 
@@ -435,6 +505,18 @@ class Entry extends DataClass implements Insertable<Entry> {
 
   /// ISO-639-1-Sprachcode, erkannt von ML Kit Language ID (Phase 3).
   final String? lang;
+
+  /// Workspace-Zugehörigkeit. Alle bestehenden Einträge erhalten beim
+  /// Migrations-Upgrade automatisch den Wert 'default'.
+  final String workspaceId;
+
+  /// Persönliche Anmerkungen des Nutzers – getrennt vom ursprünglichen Body.
+  /// Vergleichbar mit Annotationen in einer Lese-App.
+  final String? notes;
+
+  /// Letzte Wiedergabe-Position für Audio/Video in Millisekunden.
+  /// Null = noch nicht abgespielt oder am Anfang.
+  final int? playbackPositionMs;
   const Entry({
     required this.id,
     required this.createdAt,
@@ -452,6 +534,9 @@ class Entry extends DataClass implements Insertable<Entry> {
     this.embedding,
     this.aiEnrichedAt,
     this.lang,
+    required this.workspaceId,
+    this.notes,
+    this.playbackPositionMs,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -490,6 +575,13 @@ class Entry extends DataClass implements Insertable<Entry> {
     if (!nullToAbsent || lang != null) {
       map['lang'] = Variable<String>(lang);
     }
+    map['workspace_id'] = Variable<String>(workspaceId);
+    if (!nullToAbsent || notes != null) {
+      map['notes'] = Variable<String>(notes);
+    }
+    if (!nullToAbsent || playbackPositionMs != null) {
+      map['playback_position_ms'] = Variable<int>(playbackPositionMs);
+    }
     return map;
   }
 
@@ -527,6 +619,13 @@ class Entry extends DataClass implements Insertable<Entry> {
           ? const Value.absent()
           : Value(aiEnrichedAt),
       lang: lang == null && nullToAbsent ? const Value.absent() : Value(lang),
+      workspaceId: Value(workspaceId),
+      notes: notes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(notes),
+      playbackPositionMs: playbackPositionMs == null && nullToAbsent
+          ? const Value.absent()
+          : Value(playbackPositionMs),
     );
   }
 
@@ -552,6 +651,9 @@ class Entry extends DataClass implements Insertable<Entry> {
       embedding: serializer.fromJson<Uint8List?>(json['embedding']),
       aiEnrichedAt: serializer.fromJson<DateTime?>(json['aiEnrichedAt']),
       lang: serializer.fromJson<String?>(json['lang']),
+      workspaceId: serializer.fromJson<String>(json['workspaceId']),
+      notes: serializer.fromJson<String?>(json['notes']),
+      playbackPositionMs: serializer.fromJson<int?>(json['playbackPositionMs']),
     );
   }
   @override
@@ -574,6 +676,9 @@ class Entry extends DataClass implements Insertable<Entry> {
       'embedding': serializer.toJson<Uint8List?>(embedding),
       'aiEnrichedAt': serializer.toJson<DateTime?>(aiEnrichedAt),
       'lang': serializer.toJson<String?>(lang),
+      'workspaceId': serializer.toJson<String>(workspaceId),
+      'notes': serializer.toJson<String?>(notes),
+      'playbackPositionMs': serializer.toJson<int?>(playbackPositionMs),
     };
   }
 
@@ -594,6 +699,9 @@ class Entry extends DataClass implements Insertable<Entry> {
     Value<Uint8List?> embedding = const Value.absent(),
     Value<DateTime?> aiEnrichedAt = const Value.absent(),
     Value<String?> lang = const Value.absent(),
+    String? workspaceId,
+    Value<String?> notes = const Value.absent(),
+    Value<int?> playbackPositionMs = const Value.absent(),
   }) => Entry(
     id: id ?? this.id,
     createdAt: createdAt ?? this.createdAt,
@@ -611,6 +719,11 @@ class Entry extends DataClass implements Insertable<Entry> {
     embedding: embedding.present ? embedding.value : this.embedding,
     aiEnrichedAt: aiEnrichedAt.present ? aiEnrichedAt.value : this.aiEnrichedAt,
     lang: lang.present ? lang.value : this.lang,
+    workspaceId: workspaceId ?? this.workspaceId,
+    notes: notes.present ? notes.value : this.notes,
+    playbackPositionMs: playbackPositionMs.present
+        ? playbackPositionMs.value
+        : this.playbackPositionMs,
   );
   Entry copyWithCompanion(EntriesCompanion data) {
     return Entry(
@@ -634,6 +747,13 @@ class Entry extends DataClass implements Insertable<Entry> {
           ? data.aiEnrichedAt.value
           : this.aiEnrichedAt,
       lang: data.lang.present ? data.lang.value : this.lang,
+      workspaceId: data.workspaceId.present
+          ? data.workspaceId.value
+          : this.workspaceId,
+      notes: data.notes.present ? data.notes.value : this.notes,
+      playbackPositionMs: data.playbackPositionMs.present
+          ? data.playbackPositionMs.value
+          : this.playbackPositionMs,
     );
   }
 
@@ -655,7 +775,10 @@ class Entry extends DataClass implements Insertable<Entry> {
           ..write('sourceApp: $sourceApp, ')
           ..write('embedding: $embedding, ')
           ..write('aiEnrichedAt: $aiEnrichedAt, ')
-          ..write('lang: $lang')
+          ..write('lang: $lang, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('notes: $notes, ')
+          ..write('playbackPositionMs: $playbackPositionMs')
           ..write(')'))
         .toString();
   }
@@ -678,6 +801,9 @@ class Entry extends DataClass implements Insertable<Entry> {
     $driftBlobEquality.hash(embedding),
     aiEnrichedAt,
     lang,
+    workspaceId,
+    notes,
+    playbackPositionMs,
   );
   @override
   bool operator ==(Object other) =>
@@ -698,7 +824,10 @@ class Entry extends DataClass implements Insertable<Entry> {
           other.sourceApp == this.sourceApp &&
           $driftBlobEquality.equals(other.embedding, this.embedding) &&
           other.aiEnrichedAt == this.aiEnrichedAt &&
-          other.lang == this.lang);
+          other.lang == this.lang &&
+          other.workspaceId == this.workspaceId &&
+          other.notes == this.notes &&
+          other.playbackPositionMs == this.playbackPositionMs);
 }
 
 class EntriesCompanion extends UpdateCompanion<Entry> {
@@ -718,6 +847,9 @@ class EntriesCompanion extends UpdateCompanion<Entry> {
   final Value<Uint8List?> embedding;
   final Value<DateTime?> aiEnrichedAt;
   final Value<String?> lang;
+  final Value<String> workspaceId;
+  final Value<String?> notes;
+  final Value<int?> playbackPositionMs;
   final Value<int> rowid;
   const EntriesCompanion({
     this.id = const Value.absent(),
@@ -736,6 +868,9 @@ class EntriesCompanion extends UpdateCompanion<Entry> {
     this.embedding = const Value.absent(),
     this.aiEnrichedAt = const Value.absent(),
     this.lang = const Value.absent(),
+    this.workspaceId = const Value.absent(),
+    this.notes = const Value.absent(),
+    this.playbackPositionMs = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   EntriesCompanion.insert({
@@ -755,6 +890,9 @@ class EntriesCompanion extends UpdateCompanion<Entry> {
     this.embedding = const Value.absent(),
     this.aiEnrichedAt = const Value.absent(),
     this.lang = const Value.absent(),
+    this.workspaceId = const Value.absent(),
+    this.notes = const Value.absent(),
+    this.playbackPositionMs = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id);
   static Insertable<Entry> custom({
@@ -774,6 +912,9 @@ class EntriesCompanion extends UpdateCompanion<Entry> {
     Expression<Uint8List>? embedding,
     Expression<DateTime>? aiEnrichedAt,
     Expression<String>? lang,
+    Expression<String>? workspaceId,
+    Expression<String>? notes,
+    Expression<int>? playbackPositionMs,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -793,6 +934,10 @@ class EntriesCompanion extends UpdateCompanion<Entry> {
       if (embedding != null) 'embedding': embedding,
       if (aiEnrichedAt != null) 'ai_enriched_at': aiEnrichedAt,
       if (lang != null) 'lang': lang,
+      if (workspaceId != null) 'workspace_id': workspaceId,
+      if (notes != null) 'notes': notes,
+      if (playbackPositionMs != null)
+        'playback_position_ms': playbackPositionMs,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -814,6 +959,9 @@ class EntriesCompanion extends UpdateCompanion<Entry> {
     Value<Uint8List?>? embedding,
     Value<DateTime?>? aiEnrichedAt,
     Value<String?>? lang,
+    Value<String>? workspaceId,
+    Value<String?>? notes,
+    Value<int?>? playbackPositionMs,
     Value<int>? rowid,
   }) {
     return EntriesCompanion(
@@ -833,6 +981,9 @@ class EntriesCompanion extends UpdateCompanion<Entry> {
       embedding: embedding ?? this.embedding,
       aiEnrichedAt: aiEnrichedAt ?? this.aiEnrichedAt,
       lang: lang ?? this.lang,
+      workspaceId: workspaceId ?? this.workspaceId,
+      notes: notes ?? this.notes,
+      playbackPositionMs: playbackPositionMs ?? this.playbackPositionMs,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -888,6 +1039,15 @@ class EntriesCompanion extends UpdateCompanion<Entry> {
     if (lang.present) {
       map['lang'] = Variable<String>(lang.value);
     }
+    if (workspaceId.present) {
+      map['workspace_id'] = Variable<String>(workspaceId.value);
+    }
+    if (notes.present) {
+      map['notes'] = Variable<String>(notes.value);
+    }
+    if (playbackPositionMs.present) {
+      map['playback_position_ms'] = Variable<int>(playbackPositionMs.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -913,6 +1073,9 @@ class EntriesCompanion extends UpdateCompanion<Entry> {
           ..write('embedding: $embedding, ')
           ..write('aiEnrichedAt: $aiEnrichedAt, ')
           ..write('lang: $lang, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('notes: $notes, ')
+          ..write('playbackPositionMs: $playbackPositionMs, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -971,8 +1134,27 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, Tag> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _workspaceIdMeta = const VerificationMeta(
+    'workspaceId',
+  );
   @override
-  List<GeneratedColumn> get $columns => [id, name, parentId, color, icon];
+  late final GeneratedColumn<String> workspaceId = GeneratedColumn<String>(
+    'workspace_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('default'),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    parentId,
+    color,
+    icon,
+    workspaceId,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -1016,6 +1198,15 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, Tag> {
         icon.isAcceptableOrUnknown(data['icon']!, _iconMeta),
       );
     }
+    if (data.containsKey('workspace_id')) {
+      context.handle(
+        _workspaceIdMeta,
+        workspaceId.isAcceptableOrUnknown(
+          data['workspace_id']!,
+          _workspaceIdMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1045,6 +1236,10 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, Tag> {
         DriftSqlType.string,
         data['${effectivePrefix}icon'],
       ),
+      workspaceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}workspace_id'],
+      )!,
     );
   }
 
@@ -1071,12 +1266,16 @@ class Tag extends DataClass implements Insertable<Tag> {
 
   /// Material-Icon-Name oder eigener Bezeichner. Null = Standard-Tag-Icon.
   final String? icon;
+
+  /// Workspace-Zugehörigkeit.
+  final String workspaceId;
   const Tag({
     required this.id,
     required this.name,
     this.parentId,
     this.color,
     this.icon,
+    required this.workspaceId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1092,6 +1291,7 @@ class Tag extends DataClass implements Insertable<Tag> {
     if (!nullToAbsent || icon != null) {
       map['icon'] = Variable<String>(icon);
     }
+    map['workspace_id'] = Variable<String>(workspaceId);
     return map;
   }
 
@@ -1106,6 +1306,7 @@ class Tag extends DataClass implements Insertable<Tag> {
           ? const Value.absent()
           : Value(color),
       icon: icon == null && nullToAbsent ? const Value.absent() : Value(icon),
+      workspaceId: Value(workspaceId),
     );
   }
 
@@ -1120,6 +1321,7 @@ class Tag extends DataClass implements Insertable<Tag> {
       parentId: serializer.fromJson<String?>(json['parentId']),
       color: serializer.fromJson<String?>(json['color']),
       icon: serializer.fromJson<String?>(json['icon']),
+      workspaceId: serializer.fromJson<String>(json['workspaceId']),
     );
   }
   @override
@@ -1131,6 +1333,7 @@ class Tag extends DataClass implements Insertable<Tag> {
       'parentId': serializer.toJson<String?>(parentId),
       'color': serializer.toJson<String?>(color),
       'icon': serializer.toJson<String?>(icon),
+      'workspaceId': serializer.toJson<String>(workspaceId),
     };
   }
 
@@ -1140,12 +1343,14 @@ class Tag extends DataClass implements Insertable<Tag> {
     Value<String?> parentId = const Value.absent(),
     Value<String?> color = const Value.absent(),
     Value<String?> icon = const Value.absent(),
+    String? workspaceId,
   }) => Tag(
     id: id ?? this.id,
     name: name ?? this.name,
     parentId: parentId.present ? parentId.value : this.parentId,
     color: color.present ? color.value : this.color,
     icon: icon.present ? icon.value : this.icon,
+    workspaceId: workspaceId ?? this.workspaceId,
   );
   Tag copyWithCompanion(TagsCompanion data) {
     return Tag(
@@ -1154,6 +1359,9 @@ class Tag extends DataClass implements Insertable<Tag> {
       parentId: data.parentId.present ? data.parentId.value : this.parentId,
       color: data.color.present ? data.color.value : this.color,
       icon: data.icon.present ? data.icon.value : this.icon,
+      workspaceId: data.workspaceId.present
+          ? data.workspaceId.value
+          : this.workspaceId,
     );
   }
 
@@ -1164,13 +1372,14 @@ class Tag extends DataClass implements Insertable<Tag> {
           ..write('name: $name, ')
           ..write('parentId: $parentId, ')
           ..write('color: $color, ')
-          ..write('icon: $icon')
+          ..write('icon: $icon, ')
+          ..write('workspaceId: $workspaceId')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, name, parentId, color, icon);
+  int get hashCode => Object.hash(id, name, parentId, color, icon, workspaceId);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1179,7 +1388,8 @@ class Tag extends DataClass implements Insertable<Tag> {
           other.name == this.name &&
           other.parentId == this.parentId &&
           other.color == this.color &&
-          other.icon == this.icon);
+          other.icon == this.icon &&
+          other.workspaceId == this.workspaceId);
 }
 
 class TagsCompanion extends UpdateCompanion<Tag> {
@@ -1188,6 +1398,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
   final Value<String?> parentId;
   final Value<String?> color;
   final Value<String?> icon;
+  final Value<String> workspaceId;
   final Value<int> rowid;
   const TagsCompanion({
     this.id = const Value.absent(),
@@ -1195,6 +1406,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
     this.parentId = const Value.absent(),
     this.color = const Value.absent(),
     this.icon = const Value.absent(),
+    this.workspaceId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   TagsCompanion.insert({
@@ -1203,6 +1415,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
     this.parentId = const Value.absent(),
     this.color = const Value.absent(),
     this.icon = const Value.absent(),
+    this.workspaceId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        name = Value(name);
@@ -1212,6 +1425,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
     Expression<String>? parentId,
     Expression<String>? color,
     Expression<String>? icon,
+    Expression<String>? workspaceId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1220,6 +1434,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
       if (parentId != null) 'parent_id': parentId,
       if (color != null) 'color': color,
       if (icon != null) 'icon': icon,
+      if (workspaceId != null) 'workspace_id': workspaceId,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1230,6 +1445,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
     Value<String?>? parentId,
     Value<String?>? color,
     Value<String?>? icon,
+    Value<String>? workspaceId,
     Value<int>? rowid,
   }) {
     return TagsCompanion(
@@ -1238,6 +1454,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
       parentId: parentId ?? this.parentId,
       color: color ?? this.color,
       icon: icon ?? this.icon,
+      workspaceId: workspaceId ?? this.workspaceId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1260,6 +1477,9 @@ class TagsCompanion extends UpdateCompanion<Tag> {
     if (icon.present) {
       map['icon'] = Variable<String>(icon.value);
     }
+    if (workspaceId.present) {
+      map['workspace_id'] = Variable<String>(workspaceId.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1274,6 +1494,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
           ..write('parentId: $parentId, ')
           ..write('color: $color, ')
           ..write('icon: $icon, ')
+          ..write('workspaceId: $workspaceId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1595,6 +1816,67 @@ class $ContainersTable extends Containers
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _workspaceIdMeta = const VerificationMeta(
+    'workspaceId',
+  );
+  @override
+  late final GeneratedColumn<String> workspaceId = GeneratedColumn<String>(
+    'workspace_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('default'),
+  );
+  static const VerificationMeta _parentIdMeta = const VerificationMeta(
+    'parentId',
+  );
+  @override
+  late final GeneratedColumn<String> parentId = GeneratedColumn<String>(
+    'parent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _isSmartFilterMeta = const VerificationMeta(
+    'isSmartFilter',
+  );
+  @override
+  late final GeneratedColumn<bool> isSmartFilter = GeneratedColumn<bool>(
+    'is_smart_filter',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_smart_filter" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _smartFilterQueryMeta = const VerificationMeta(
+    'smartFilterQuery',
+  );
+  @override
+  late final GeneratedColumn<String> smartFilterQuery = GeneratedColumn<String>(
+    'smart_filter_query',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1606,6 +1888,11 @@ class $ContainersTable extends Containers
     createdAt,
     archived,
     filterJson,
+    workspaceId,
+    parentId,
+    sortOrder,
+    isSmartFilter,
+    smartFilterQuery,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1679,6 +1966,45 @@ class $ContainersTable extends Containers
         filterJson.isAcceptableOrUnknown(data['filter_json']!, _filterJsonMeta),
       );
     }
+    if (data.containsKey('workspace_id')) {
+      context.handle(
+        _workspaceIdMeta,
+        workspaceId.isAcceptableOrUnknown(
+          data['workspace_id']!,
+          _workspaceIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('parent_id')) {
+      context.handle(
+        _parentIdMeta,
+        parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('is_smart_filter')) {
+      context.handle(
+        _isSmartFilterMeta,
+        isSmartFilter.isAcceptableOrUnknown(
+          data['is_smart_filter']!,
+          _isSmartFilterMeta,
+        ),
+      );
+    }
+    if (data.containsKey('smart_filter_query')) {
+      context.handle(
+        _smartFilterQueryMeta,
+        smartFilterQuery.isAcceptableOrUnknown(
+          data['smart_filter_query']!,
+          _smartFilterQueryMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1724,6 +2050,26 @@ class $ContainersTable extends Containers
         DriftSqlType.string,
         data['${effectivePrefix}filter_json'],
       ),
+      workspaceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}workspace_id'],
+      )!,
+      parentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}parent_id'],
+      ),
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      isSmartFilter: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_smart_filter'],
+      )!,
+      smartFilterQuery: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}smart_filter_query'],
+      ),
     );
   }
 
@@ -1762,6 +2108,23 @@ class Container extends DataClass implements Insertable<Container> {
   /// JSON-Filter-Definition für Hub-Tabs (Phase 4).
   /// Null für 'project' und 'area'. Bei 'hub': JSON gemäß FilterDefinition-Schema.
   final String? filterJson;
+
+  /// Workspace-Zugehörigkeit.
+  final String workspaceId;
+
+  /// Hierarchie: Null = Root-Container. Ermöglicht verschachtelte Bereiche.
+  final String? parentId;
+
+  /// Sortierreihenfolge innerhalb desselben Eltern-Containers.
+  final int sortOrder;
+
+  /// Smart-Filter: Einträge werden dynamisch per JSON-Regel gesammelt
+  /// statt manuell zugewiesen. Äquivalent zu MediaShelf's Smart Collections.
+  final bool isSmartFilter;
+
+  /// JSON-Regelset für Smart-Filter (isSmartFilter = true).
+  /// Format: {"logic":"AND","rules":[{"field":"type","op":"=","value":"link"}]}
+  final String? smartFilterQuery;
   const Container({
     required this.id,
     required this.kind,
@@ -1772,6 +2135,11 @@ class Container extends DataClass implements Insertable<Container> {
     required this.createdAt,
     required this.archived,
     this.filterJson,
+    required this.workspaceId,
+    this.parentId,
+    required this.sortOrder,
+    required this.isSmartFilter,
+    this.smartFilterQuery,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1788,6 +2156,15 @@ class Container extends DataClass implements Insertable<Container> {
     map['archived'] = Variable<bool>(archived);
     if (!nullToAbsent || filterJson != null) {
       map['filter_json'] = Variable<String>(filterJson);
+    }
+    map['workspace_id'] = Variable<String>(workspaceId);
+    if (!nullToAbsent || parentId != null) {
+      map['parent_id'] = Variable<String>(parentId);
+    }
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['is_smart_filter'] = Variable<bool>(isSmartFilter);
+    if (!nullToAbsent || smartFilterQuery != null) {
+      map['smart_filter_query'] = Variable<String>(smartFilterQuery);
     }
     return map;
   }
@@ -1807,6 +2184,15 @@ class Container extends DataClass implements Insertable<Container> {
       filterJson: filterJson == null && nullToAbsent
           ? const Value.absent()
           : Value(filterJson),
+      workspaceId: Value(workspaceId),
+      parentId: parentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentId),
+      sortOrder: Value(sortOrder),
+      isSmartFilter: Value(isSmartFilter),
+      smartFilterQuery: smartFilterQuery == null && nullToAbsent
+          ? const Value.absent()
+          : Value(smartFilterQuery),
     );
   }
 
@@ -1825,6 +2211,11 @@ class Container extends DataClass implements Insertable<Container> {
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       archived: serializer.fromJson<bool>(json['archived']),
       filterJson: serializer.fromJson<String?>(json['filterJson']),
+      workspaceId: serializer.fromJson<String>(json['workspaceId']),
+      parentId: serializer.fromJson<String?>(json['parentId']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      isSmartFilter: serializer.fromJson<bool>(json['isSmartFilter']),
+      smartFilterQuery: serializer.fromJson<String?>(json['smartFilterQuery']),
     );
   }
   @override
@@ -1840,6 +2231,11 @@ class Container extends DataClass implements Insertable<Container> {
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'archived': serializer.toJson<bool>(archived),
       'filterJson': serializer.toJson<String?>(filterJson),
+      'workspaceId': serializer.toJson<String>(workspaceId),
+      'parentId': serializer.toJson<String?>(parentId),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'isSmartFilter': serializer.toJson<bool>(isSmartFilter),
+      'smartFilterQuery': serializer.toJson<String?>(smartFilterQuery),
     };
   }
 
@@ -1853,6 +2249,11 @@ class Container extends DataClass implements Insertable<Container> {
     DateTime? createdAt,
     bool? archived,
     Value<String?> filterJson = const Value.absent(),
+    String? workspaceId,
+    Value<String?> parentId = const Value.absent(),
+    int? sortOrder,
+    bool? isSmartFilter,
+    Value<String?> smartFilterQuery = const Value.absent(),
   }) => Container(
     id: id ?? this.id,
     kind: kind ?? this.kind,
@@ -1863,6 +2264,13 @@ class Container extends DataClass implements Insertable<Container> {
     createdAt: createdAt ?? this.createdAt,
     archived: archived ?? this.archived,
     filterJson: filterJson.present ? filterJson.value : this.filterJson,
+    workspaceId: workspaceId ?? this.workspaceId,
+    parentId: parentId.present ? parentId.value : this.parentId,
+    sortOrder: sortOrder ?? this.sortOrder,
+    isSmartFilter: isSmartFilter ?? this.isSmartFilter,
+    smartFilterQuery: smartFilterQuery.present
+        ? smartFilterQuery.value
+        : this.smartFilterQuery,
   );
   Container copyWithCompanion(ContainersCompanion data) {
     return Container(
@@ -1879,6 +2287,17 @@ class Container extends DataClass implements Insertable<Container> {
       filterJson: data.filterJson.present
           ? data.filterJson.value
           : this.filterJson,
+      workspaceId: data.workspaceId.present
+          ? data.workspaceId.value
+          : this.workspaceId,
+      parentId: data.parentId.present ? data.parentId.value : this.parentId,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      isSmartFilter: data.isSmartFilter.present
+          ? data.isSmartFilter.value
+          : this.isSmartFilter,
+      smartFilterQuery: data.smartFilterQuery.present
+          ? data.smartFilterQuery.value
+          : this.smartFilterQuery,
     );
   }
 
@@ -1893,7 +2312,12 @@ class Container extends DataClass implements Insertable<Container> {
           ..write('color: $color, ')
           ..write('createdAt: $createdAt, ')
           ..write('archived: $archived, ')
-          ..write('filterJson: $filterJson')
+          ..write('filterJson: $filterJson, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('parentId: $parentId, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('isSmartFilter: $isSmartFilter, ')
+          ..write('smartFilterQuery: $smartFilterQuery')
           ..write(')'))
         .toString();
   }
@@ -1909,6 +2333,11 @@ class Container extends DataClass implements Insertable<Container> {
     createdAt,
     archived,
     filterJson,
+    workspaceId,
+    parentId,
+    sortOrder,
+    isSmartFilter,
+    smartFilterQuery,
   );
   @override
   bool operator ==(Object other) =>
@@ -1922,7 +2351,12 @@ class Container extends DataClass implements Insertable<Container> {
           other.color == this.color &&
           other.createdAt == this.createdAt &&
           other.archived == this.archived &&
-          other.filterJson == this.filterJson);
+          other.filterJson == this.filterJson &&
+          other.workspaceId == this.workspaceId &&
+          other.parentId == this.parentId &&
+          other.sortOrder == this.sortOrder &&
+          other.isSmartFilter == this.isSmartFilter &&
+          other.smartFilterQuery == this.smartFilterQuery);
 }
 
 class ContainersCompanion extends UpdateCompanion<Container> {
@@ -1935,6 +2369,11 @@ class ContainersCompanion extends UpdateCompanion<Container> {
   final Value<DateTime> createdAt;
   final Value<bool> archived;
   final Value<String?> filterJson;
+  final Value<String> workspaceId;
+  final Value<String?> parentId;
+  final Value<int> sortOrder;
+  final Value<bool> isSmartFilter;
+  final Value<String?> smartFilterQuery;
   final Value<int> rowid;
   const ContainersCompanion({
     this.id = const Value.absent(),
@@ -1946,6 +2385,11 @@ class ContainersCompanion extends UpdateCompanion<Container> {
     this.createdAt = const Value.absent(),
     this.archived = const Value.absent(),
     this.filterJson = const Value.absent(),
+    this.workspaceId = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.isSmartFilter = const Value.absent(),
+    this.smartFilterQuery = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   ContainersCompanion.insert({
@@ -1958,6 +2402,11 @@ class ContainersCompanion extends UpdateCompanion<Container> {
     this.createdAt = const Value.absent(),
     this.archived = const Value.absent(),
     this.filterJson = const Value.absent(),
+    this.workspaceId = const Value.absent(),
+    this.parentId = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.isSmartFilter = const Value.absent(),
+    this.smartFilterQuery = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        kind = Value(kind),
@@ -1972,6 +2421,11 @@ class ContainersCompanion extends UpdateCompanion<Container> {
     Expression<DateTime>? createdAt,
     Expression<bool>? archived,
     Expression<String>? filterJson,
+    Expression<String>? workspaceId,
+    Expression<String>? parentId,
+    Expression<int>? sortOrder,
+    Expression<bool>? isSmartFilter,
+    Expression<String>? smartFilterQuery,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1984,6 +2438,11 @@ class ContainersCompanion extends UpdateCompanion<Container> {
       if (createdAt != null) 'created_at': createdAt,
       if (archived != null) 'archived': archived,
       if (filterJson != null) 'filter_json': filterJson,
+      if (workspaceId != null) 'workspace_id': workspaceId,
+      if (parentId != null) 'parent_id': parentId,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (isSmartFilter != null) 'is_smart_filter': isSmartFilter,
+      if (smartFilterQuery != null) 'smart_filter_query': smartFilterQuery,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1998,6 +2457,11 @@ class ContainersCompanion extends UpdateCompanion<Container> {
     Value<DateTime>? createdAt,
     Value<bool>? archived,
     Value<String?>? filterJson,
+    Value<String>? workspaceId,
+    Value<String?>? parentId,
+    Value<int>? sortOrder,
+    Value<bool>? isSmartFilter,
+    Value<String?>? smartFilterQuery,
     Value<int>? rowid,
   }) {
     return ContainersCompanion(
@@ -2010,6 +2474,11 @@ class ContainersCompanion extends UpdateCompanion<Container> {
       createdAt: createdAt ?? this.createdAt,
       archived: archived ?? this.archived,
       filterJson: filterJson ?? this.filterJson,
+      workspaceId: workspaceId ?? this.workspaceId,
+      parentId: parentId ?? this.parentId,
+      sortOrder: sortOrder ?? this.sortOrder,
+      isSmartFilter: isSmartFilter ?? this.isSmartFilter,
+      smartFilterQuery: smartFilterQuery ?? this.smartFilterQuery,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -2044,6 +2513,21 @@ class ContainersCompanion extends UpdateCompanion<Container> {
     if (filterJson.present) {
       map['filter_json'] = Variable<String>(filterJson.value);
     }
+    if (workspaceId.present) {
+      map['workspace_id'] = Variable<String>(workspaceId.value);
+    }
+    if (parentId.present) {
+      map['parent_id'] = Variable<String>(parentId.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (isSmartFilter.present) {
+      map['is_smart_filter'] = Variable<bool>(isSmartFilter.value);
+    }
+    if (smartFilterQuery.present) {
+      map['smart_filter_query'] = Variable<String>(smartFilterQuery.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -2062,6 +2546,11 @@ class ContainersCompanion extends UpdateCompanion<Container> {
           ..write('createdAt: $createdAt, ')
           ..write('archived: $archived, ')
           ..write('filterJson: $filterJson, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('parentId: $parentId, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('isSmartFilter: $isSmartFilter, ')
+          ..write('smartFilterQuery: $smartFilterQuery, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -2929,6 +3418,1754 @@ class AttachmentsCompanion extends UpdateCompanion<Attachment> {
   }
 }
 
+class $WorkspacesTable extends Workspaces
+    with TableInfo<$WorkspacesTable, Workspace> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $WorkspacesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _iconMeta = const VerificationMeta('icon');
+  @override
+  late final GeneratedColumn<String> icon = GeneratedColumn<String>(
+    'icon',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('📁'),
+  );
+  static const VerificationMeta _colorMeta = const VerificationMeta('color');
+  @override
+  late final GeneratedColumn<String> color = GeneratedColumn<String>(
+    'color',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('#6750A4'),
+  );
+  static const VerificationMeta _isDefaultMeta = const VerificationMeta(
+    'isDefault',
+  );
+  @override
+  late final GeneratedColumn<bool> isDefault = GeneratedColumn<bool>(
+    'is_default',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_default" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    clientDefault: () => DateTime.now().toUtc(),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    icon,
+    color,
+    isDefault,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'workspaces';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Workspace> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('icon')) {
+      context.handle(
+        _iconMeta,
+        icon.isAcceptableOrUnknown(data['icon']!, _iconMeta),
+      );
+    }
+    if (data.containsKey('color')) {
+      context.handle(
+        _colorMeta,
+        color.isAcceptableOrUnknown(data['color']!, _colorMeta),
+      );
+    }
+    if (data.containsKey('is_default')) {
+      context.handle(
+        _isDefaultMeta,
+        isDefault.isAcceptableOrUnknown(data['is_default']!, _isDefaultMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Workspace map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Workspace(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      icon: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}icon'],
+      )!,
+      color: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}color'],
+      )!,
+      isDefault: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_default'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $WorkspacesTable createAlias(String alias) {
+    return $WorkspacesTable(attachedDatabase, alias);
+  }
+}
+
+class Workspace extends DataClass implements Insertable<Workspace> {
+  /// UUID-Primärschlüssel.
+  final String id;
+
+  /// Anzeigename, z. B. 'Privat' oder 'Arbeit'.
+  final String name;
+
+  /// Emoji oder Material-Icon-Name für die Workspace-Auswahl-UI.
+  final String icon;
+
+  /// Hex-Akzentfarbe, z. B. '#6750A4'.
+  final String color;
+
+  /// Genau ein Workspace trägt isDefault = true: der beim Start geöffnete.
+  final bool isDefault;
+  final DateTime createdAt;
+  const Workspace({
+    required this.id,
+    required this.name,
+    required this.icon,
+    required this.color,
+    required this.isDefault,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['icon'] = Variable<String>(icon);
+    map['color'] = Variable<String>(color);
+    map['is_default'] = Variable<bool>(isDefault);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  WorkspacesCompanion toCompanion(bool nullToAbsent) {
+    return WorkspacesCompanion(
+      id: Value(id),
+      name: Value(name),
+      icon: Value(icon),
+      color: Value(color),
+      isDefault: Value(isDefault),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory Workspace.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Workspace(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      icon: serializer.fromJson<String>(json['icon']),
+      color: serializer.fromJson<String>(json['color']),
+      isDefault: serializer.fromJson<bool>(json['isDefault']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'icon': serializer.toJson<String>(icon),
+      'color': serializer.toJson<String>(color),
+      'isDefault': serializer.toJson<bool>(isDefault),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  Workspace copyWith({
+    String? id,
+    String? name,
+    String? icon,
+    String? color,
+    bool? isDefault,
+    DateTime? createdAt,
+  }) => Workspace(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    icon: icon ?? this.icon,
+    color: color ?? this.color,
+    isDefault: isDefault ?? this.isDefault,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  Workspace copyWithCompanion(WorkspacesCompanion data) {
+    return Workspace(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      icon: data.icon.present ? data.icon.value : this.icon,
+      color: data.color.present ? data.color.value : this.color,
+      isDefault: data.isDefault.present ? data.isDefault.value : this.isDefault,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Workspace(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('icon: $icon, ')
+          ..write('color: $color, ')
+          ..write('isDefault: $isDefault, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, name, icon, color, isDefault, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Workspace &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.icon == this.icon &&
+          other.color == this.color &&
+          other.isDefault == this.isDefault &&
+          other.createdAt == this.createdAt);
+}
+
+class WorkspacesCompanion extends UpdateCompanion<Workspace> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<String> icon;
+  final Value<String> color;
+  final Value<bool> isDefault;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const WorkspacesCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.icon = const Value.absent(),
+    this.color = const Value.absent(),
+    this.isDefault = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  WorkspacesCompanion.insert({
+    required String id,
+    required String name,
+    this.icon = const Value.absent(),
+    this.color = const Value.absent(),
+    this.isDefault = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name);
+  static Insertable<Workspace> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<String>? icon,
+    Expression<String>? color,
+    Expression<bool>? isDefault,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (icon != null) 'icon': icon,
+      if (color != null) 'color': color,
+      if (isDefault != null) 'is_default': isDefault,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  WorkspacesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<String>? icon,
+    Value<String>? color,
+    Value<bool>? isDefault,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return WorkspacesCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      icon: icon ?? this.icon,
+      color: color ?? this.color,
+      isDefault: isDefault ?? this.isDefault,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (icon.present) {
+      map['icon'] = Variable<String>(icon.value);
+    }
+    if (color.present) {
+      map['color'] = Variable<String>(color.value);
+    }
+    if (isDefault.present) {
+      map['is_default'] = Variable<bool>(isDefault.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WorkspacesCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('icon: $icon, ')
+          ..write('color: $color, ')
+          ..write('isDefault: $isDefault, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $PropertyDefinitionsTable extends PropertyDefinitions
+    with TableInfo<$PropertyDefinitionsTable, PropertyDefinition> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PropertyDefinitionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _workspaceIdMeta = const VerificationMeta(
+    'workspaceId',
+  );
+  @override
+  late final GeneratedColumn<String> workspaceId = GeneratedColumn<String>(
+    'workspace_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('default'),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _fieldTypeMeta = const VerificationMeta(
+    'fieldType',
+  );
+  @override
+  late final GeneratedColumn<String> fieldType = GeneratedColumn<String>(
+    'field_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _optionsMeta = const VerificationMeta(
+    'options',
+  );
+  @override
+  late final GeneratedColumn<String> options = GeneratedColumn<String>(
+    'options',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _templateIdMeta = const VerificationMeta(
+    'templateId',
+  );
+  @override
+  late final GeneratedColumn<String> templateId = GeneratedColumn<String>(
+    'template_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    workspaceId,
+    name,
+    fieldType,
+    options,
+    sortOrder,
+    templateId,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'property_definitions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PropertyDefinition> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('workspace_id')) {
+      context.handle(
+        _workspaceIdMeta,
+        workspaceId.isAcceptableOrUnknown(
+          data['workspace_id']!,
+          _workspaceIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('field_type')) {
+      context.handle(
+        _fieldTypeMeta,
+        fieldType.isAcceptableOrUnknown(data['field_type']!, _fieldTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_fieldTypeMeta);
+    }
+    if (data.containsKey('options')) {
+      context.handle(
+        _optionsMeta,
+        options.isAcceptableOrUnknown(data['options']!, _optionsMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('template_id')) {
+      context.handle(
+        _templateIdMeta,
+        templateId.isAcceptableOrUnknown(data['template_id']!, _templateIdMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  PropertyDefinition map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PropertyDefinition(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      workspaceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}workspace_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      fieldType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}field_type'],
+      )!,
+      options: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}options'],
+      ),
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      templateId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}template_id'],
+      ),
+    );
+  }
+
+  @override
+  $PropertyDefinitionsTable createAlias(String alias) {
+    return $PropertyDefinitionsTable(attachedDatabase, alias);
+  }
+}
+
+class PropertyDefinition extends DataClass
+    implements Insertable<PropertyDefinition> {
+  final String id;
+
+  /// Workspace-Zugehörigkeit.
+  final String workspaceId;
+
+  /// Anzeigename des Feldes, z. B. 'Quelle', 'Status', 'Bewertung'.
+  final String name;
+
+  /// Gespeicherter PropertyFieldType-Enum-Name.
+  final String fieldType;
+
+  /// JSON-Array mit Auswahloptionen für select/multiselect und
+  /// Vorschlagsliste für tags. Null bei anderen Typen.
+  /// Beispiel: '["Entwurf","Aktiv","Fertig"]'
+  final String? options;
+
+  /// Reihenfolge in der Properties-Anzeige und im Edit-Panel.
+  final int sortOrder;
+
+  /// Null = workspace-globale Definition (in allen Einträgen nutzbar).
+  /// Gesetzt = gehört zu einem Template, erscheint beim Template-Auswählen.
+  final String? templateId;
+  const PropertyDefinition({
+    required this.id,
+    required this.workspaceId,
+    required this.name,
+    required this.fieldType,
+    this.options,
+    required this.sortOrder,
+    this.templateId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['workspace_id'] = Variable<String>(workspaceId);
+    map['name'] = Variable<String>(name);
+    map['field_type'] = Variable<String>(fieldType);
+    if (!nullToAbsent || options != null) {
+      map['options'] = Variable<String>(options);
+    }
+    map['sort_order'] = Variable<int>(sortOrder);
+    if (!nullToAbsent || templateId != null) {
+      map['template_id'] = Variable<String>(templateId);
+    }
+    return map;
+  }
+
+  PropertyDefinitionsCompanion toCompanion(bool nullToAbsent) {
+    return PropertyDefinitionsCompanion(
+      id: Value(id),
+      workspaceId: Value(workspaceId),
+      name: Value(name),
+      fieldType: Value(fieldType),
+      options: options == null && nullToAbsent
+          ? const Value.absent()
+          : Value(options),
+      sortOrder: Value(sortOrder),
+      templateId: templateId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(templateId),
+    );
+  }
+
+  factory PropertyDefinition.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PropertyDefinition(
+      id: serializer.fromJson<String>(json['id']),
+      workspaceId: serializer.fromJson<String>(json['workspaceId']),
+      name: serializer.fromJson<String>(json['name']),
+      fieldType: serializer.fromJson<String>(json['fieldType']),
+      options: serializer.fromJson<String?>(json['options']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      templateId: serializer.fromJson<String?>(json['templateId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'workspaceId': serializer.toJson<String>(workspaceId),
+      'name': serializer.toJson<String>(name),
+      'fieldType': serializer.toJson<String>(fieldType),
+      'options': serializer.toJson<String?>(options),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'templateId': serializer.toJson<String?>(templateId),
+    };
+  }
+
+  PropertyDefinition copyWith({
+    String? id,
+    String? workspaceId,
+    String? name,
+    String? fieldType,
+    Value<String?> options = const Value.absent(),
+    int? sortOrder,
+    Value<String?> templateId = const Value.absent(),
+  }) => PropertyDefinition(
+    id: id ?? this.id,
+    workspaceId: workspaceId ?? this.workspaceId,
+    name: name ?? this.name,
+    fieldType: fieldType ?? this.fieldType,
+    options: options.present ? options.value : this.options,
+    sortOrder: sortOrder ?? this.sortOrder,
+    templateId: templateId.present ? templateId.value : this.templateId,
+  );
+  PropertyDefinition copyWithCompanion(PropertyDefinitionsCompanion data) {
+    return PropertyDefinition(
+      id: data.id.present ? data.id.value : this.id,
+      workspaceId: data.workspaceId.present
+          ? data.workspaceId.value
+          : this.workspaceId,
+      name: data.name.present ? data.name.value : this.name,
+      fieldType: data.fieldType.present ? data.fieldType.value : this.fieldType,
+      options: data.options.present ? data.options.value : this.options,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      templateId: data.templateId.present
+          ? data.templateId.value
+          : this.templateId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PropertyDefinition(')
+          ..write('id: $id, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('name: $name, ')
+          ..write('fieldType: $fieldType, ')
+          ..write('options: $options, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('templateId: $templateId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    workspaceId,
+    name,
+    fieldType,
+    options,
+    sortOrder,
+    templateId,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PropertyDefinition &&
+          other.id == this.id &&
+          other.workspaceId == this.workspaceId &&
+          other.name == this.name &&
+          other.fieldType == this.fieldType &&
+          other.options == this.options &&
+          other.sortOrder == this.sortOrder &&
+          other.templateId == this.templateId);
+}
+
+class PropertyDefinitionsCompanion extends UpdateCompanion<PropertyDefinition> {
+  final Value<String> id;
+  final Value<String> workspaceId;
+  final Value<String> name;
+  final Value<String> fieldType;
+  final Value<String?> options;
+  final Value<int> sortOrder;
+  final Value<String?> templateId;
+  final Value<int> rowid;
+  const PropertyDefinitionsCompanion({
+    this.id = const Value.absent(),
+    this.workspaceId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.fieldType = const Value.absent(),
+    this.options = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.templateId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PropertyDefinitionsCompanion.insert({
+    required String id,
+    this.workspaceId = const Value.absent(),
+    required String name,
+    required String fieldType,
+    this.options = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.templateId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       fieldType = Value(fieldType);
+  static Insertable<PropertyDefinition> custom({
+    Expression<String>? id,
+    Expression<String>? workspaceId,
+    Expression<String>? name,
+    Expression<String>? fieldType,
+    Expression<String>? options,
+    Expression<int>? sortOrder,
+    Expression<String>? templateId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (workspaceId != null) 'workspace_id': workspaceId,
+      if (name != null) 'name': name,
+      if (fieldType != null) 'field_type': fieldType,
+      if (options != null) 'options': options,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (templateId != null) 'template_id': templateId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PropertyDefinitionsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? workspaceId,
+    Value<String>? name,
+    Value<String>? fieldType,
+    Value<String?>? options,
+    Value<int>? sortOrder,
+    Value<String?>? templateId,
+    Value<int>? rowid,
+  }) {
+    return PropertyDefinitionsCompanion(
+      id: id ?? this.id,
+      workspaceId: workspaceId ?? this.workspaceId,
+      name: name ?? this.name,
+      fieldType: fieldType ?? this.fieldType,
+      options: options ?? this.options,
+      sortOrder: sortOrder ?? this.sortOrder,
+      templateId: templateId ?? this.templateId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (workspaceId.present) {
+      map['workspace_id'] = Variable<String>(workspaceId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (fieldType.present) {
+      map['field_type'] = Variable<String>(fieldType.value);
+    }
+    if (options.present) {
+      map['options'] = Variable<String>(options.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (templateId.present) {
+      map['template_id'] = Variable<String>(templateId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PropertyDefinitionsCompanion(')
+          ..write('id: $id, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('name: $name, ')
+          ..write('fieldType: $fieldType, ')
+          ..write('options: $options, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('templateId: $templateId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $EntryPropertiesTable extends EntryProperties
+    with TableInfo<$EntryPropertiesTable, EntryProperty> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $EntryPropertiesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _entryIdMeta = const VerificationMeta(
+    'entryId',
+  );
+  @override
+  late final GeneratedColumn<String> entryId = GeneratedColumn<String>(
+    'entry_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _propertyIdMeta = const VerificationMeta(
+    'propertyId',
+  );
+  @override
+  late final GeneratedColumn<String> propertyId = GeneratedColumn<String>(
+    'property_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _valueMeta = const VerificationMeta('value');
+  @override
+  late final GeneratedColumn<String> value = GeneratedColumn<String>(
+    'value',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, entryId, propertyId, value];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'entry_properties';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<EntryProperty> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('entry_id')) {
+      context.handle(
+        _entryIdMeta,
+        entryId.isAcceptableOrUnknown(data['entry_id']!, _entryIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entryIdMeta);
+    }
+    if (data.containsKey('property_id')) {
+      context.handle(
+        _propertyIdMeta,
+        propertyId.isAcceptableOrUnknown(data['property_id']!, _propertyIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_propertyIdMeta);
+    }
+    if (data.containsKey('value')) {
+      context.handle(
+        _valueMeta,
+        value.isAcceptableOrUnknown(data['value']!, _valueMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  EntryProperty map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return EntryProperty(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      entryId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entry_id'],
+      )!,
+      propertyId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}property_id'],
+      )!,
+      value: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}value'],
+      ),
+    );
+  }
+
+  @override
+  $EntryPropertiesTable createAlias(String alias) {
+    return $EntryPropertiesTable(attachedDatabase, alias);
+  }
+}
+
+class EntryProperty extends DataClass implements Insertable<EntryProperty> {
+  final String id;
+
+  /// Zugehöriger Eintrag.
+  final String entryId;
+
+  /// Die Feld-Definition (Name, Typ, Optionen).
+  final String propertyId;
+
+  /// Wert als JSON-kodierter String:
+  /// - text/url       → "\"mein Text\""
+  /// - number         → "42" oder "3.14"
+  /// - date           → "\"2025-12-31\""
+  /// - boolean        → "true" / "false"
+  /// - tags           → "[\"flutter\",\"dart\"]"
+  /// - link (intern)  → "{\"type\":\"internal\",\"id\":\"uuid\"}"
+  /// - link (extern)  → "{\"type\":\"external\",\"url\":\"https://...\"}"
+  /// - select         → "\"Aktiv\""
+  /// - multiselect    → "[\"A\",\"B\"]"
+  /// - rating         → "3"
+  final String? value;
+  const EntryProperty({
+    required this.id,
+    required this.entryId,
+    required this.propertyId,
+    this.value,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['entry_id'] = Variable<String>(entryId);
+    map['property_id'] = Variable<String>(propertyId);
+    if (!nullToAbsent || value != null) {
+      map['value'] = Variable<String>(value);
+    }
+    return map;
+  }
+
+  EntryPropertiesCompanion toCompanion(bool nullToAbsent) {
+    return EntryPropertiesCompanion(
+      id: Value(id),
+      entryId: Value(entryId),
+      propertyId: Value(propertyId),
+      value: value == null && nullToAbsent
+          ? const Value.absent()
+          : Value(value),
+    );
+  }
+
+  factory EntryProperty.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return EntryProperty(
+      id: serializer.fromJson<String>(json['id']),
+      entryId: serializer.fromJson<String>(json['entryId']),
+      propertyId: serializer.fromJson<String>(json['propertyId']),
+      value: serializer.fromJson<String?>(json['value']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'entryId': serializer.toJson<String>(entryId),
+      'propertyId': serializer.toJson<String>(propertyId),
+      'value': serializer.toJson<String?>(value),
+    };
+  }
+
+  EntryProperty copyWith({
+    String? id,
+    String? entryId,
+    String? propertyId,
+    Value<String?> value = const Value.absent(),
+  }) => EntryProperty(
+    id: id ?? this.id,
+    entryId: entryId ?? this.entryId,
+    propertyId: propertyId ?? this.propertyId,
+    value: value.present ? value.value : this.value,
+  );
+  EntryProperty copyWithCompanion(EntryPropertiesCompanion data) {
+    return EntryProperty(
+      id: data.id.present ? data.id.value : this.id,
+      entryId: data.entryId.present ? data.entryId.value : this.entryId,
+      propertyId: data.propertyId.present
+          ? data.propertyId.value
+          : this.propertyId,
+      value: data.value.present ? data.value.value : this.value,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EntryProperty(')
+          ..write('id: $id, ')
+          ..write('entryId: $entryId, ')
+          ..write('propertyId: $propertyId, ')
+          ..write('value: $value')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, entryId, propertyId, value);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is EntryProperty &&
+          other.id == this.id &&
+          other.entryId == this.entryId &&
+          other.propertyId == this.propertyId &&
+          other.value == this.value);
+}
+
+class EntryPropertiesCompanion extends UpdateCompanion<EntryProperty> {
+  final Value<String> id;
+  final Value<String> entryId;
+  final Value<String> propertyId;
+  final Value<String?> value;
+  final Value<int> rowid;
+  const EntryPropertiesCompanion({
+    this.id = const Value.absent(),
+    this.entryId = const Value.absent(),
+    this.propertyId = const Value.absent(),
+    this.value = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  EntryPropertiesCompanion.insert({
+    required String id,
+    required String entryId,
+    required String propertyId,
+    this.value = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       entryId = Value(entryId),
+       propertyId = Value(propertyId);
+  static Insertable<EntryProperty> custom({
+    Expression<String>? id,
+    Expression<String>? entryId,
+    Expression<String>? propertyId,
+    Expression<String>? value,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (entryId != null) 'entry_id': entryId,
+      if (propertyId != null) 'property_id': propertyId,
+      if (value != null) 'value': value,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  EntryPropertiesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? entryId,
+    Value<String>? propertyId,
+    Value<String?>? value,
+    Value<int>? rowid,
+  }) {
+    return EntryPropertiesCompanion(
+      id: id ?? this.id,
+      entryId: entryId ?? this.entryId,
+      propertyId: propertyId ?? this.propertyId,
+      value: value ?? this.value,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (entryId.present) {
+      map['entry_id'] = Variable<String>(entryId.value);
+    }
+    if (propertyId.present) {
+      map['property_id'] = Variable<String>(propertyId.value);
+    }
+    if (value.present) {
+      map['value'] = Variable<String>(value.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EntryPropertiesCompanion(')
+          ..write('id: $id, ')
+          ..write('entryId: $entryId, ')
+          ..write('propertyId: $propertyId, ')
+          ..write('value: $value, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $TemplatesTable extends Templates
+    with TableInfo<$TemplatesTable, Template> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TemplatesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _workspaceIdMeta = const VerificationMeta(
+    'workspaceId',
+  );
+  @override
+  late final GeneratedColumn<String> workspaceId = GeneratedColumn<String>(
+    'workspace_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('default'),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _iconMeta = const VerificationMeta('icon');
+  @override
+  late final GeneratedColumn<String> icon = GeneratedColumn<String>(
+    'icon',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('📋'),
+  );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _propertyIdsMeta = const VerificationMeta(
+    'propertyIds',
+  );
+  @override
+  late final GeneratedColumn<String> propertyIds = GeneratedColumn<String>(
+    'property_ids',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('[]'),
+  );
+  static const VerificationMeta _defaultValuesMeta = const VerificationMeta(
+    'defaultValues',
+  );
+  @override
+  late final GeneratedColumn<String> defaultValues = GeneratedColumn<String>(
+    'default_values',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('{}'),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    clientDefault: () => DateTime.now().toUtc(),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    workspaceId,
+    name,
+    icon,
+    description,
+    propertyIds,
+    defaultValues,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'templates';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Template> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('workspace_id')) {
+      context.handle(
+        _workspaceIdMeta,
+        workspaceId.isAcceptableOrUnknown(
+          data['workspace_id']!,
+          _workspaceIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('icon')) {
+      context.handle(
+        _iconMeta,
+        icon.isAcceptableOrUnknown(data['icon']!, _iconMeta),
+      );
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('property_ids')) {
+      context.handle(
+        _propertyIdsMeta,
+        propertyIds.isAcceptableOrUnknown(
+          data['property_ids']!,
+          _propertyIdsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('default_values')) {
+      context.handle(
+        _defaultValuesMeta,
+        defaultValues.isAcceptableOrUnknown(
+          data['default_values']!,
+          _defaultValuesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Template map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Template(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      workspaceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}workspace_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      icon: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}icon'],
+      )!,
+      description: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}description'],
+      ),
+      propertyIds: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}property_ids'],
+      )!,
+      defaultValues: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}default_values'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $TemplatesTable createAlias(String alias) {
+    return $TemplatesTable(attachedDatabase, alias);
+  }
+}
+
+class Template extends DataClass implements Insertable<Template> {
+  final String id;
+  final String workspaceId;
+
+  /// Anzeigename, z. B. 'Buchnotiz', 'Meeting', 'Idee'.
+  final String name;
+
+  /// Emoji oder Material-Icon-Name.
+  final String icon;
+  final String? description;
+
+  /// Geordnetes JSON-Array von PropertyDefinition-IDs, die zu diesem
+  /// Template gehören. Reihenfolge bestimmt die Anzeige-Reihenfolge.
+  /// Beispiel: '["prop-abc","prop-def"]'
+  final String propertyIds;
+
+  /// JSON-Objekt: propertyId → vorausgefüllter Wert (JSON-kodiert).
+  /// Leere Map wenn keine Standardwerte. Beispiel:
+  /// '{"prop-rating":"0","prop-genre":"\"Sachbuch\""}'
+  final String defaultValues;
+  final DateTime createdAt;
+  const Template({
+    required this.id,
+    required this.workspaceId,
+    required this.name,
+    required this.icon,
+    this.description,
+    required this.propertyIds,
+    required this.defaultValues,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['workspace_id'] = Variable<String>(workspaceId);
+    map['name'] = Variable<String>(name);
+    map['icon'] = Variable<String>(icon);
+    if (!nullToAbsent || description != null) {
+      map['description'] = Variable<String>(description);
+    }
+    map['property_ids'] = Variable<String>(propertyIds);
+    map['default_values'] = Variable<String>(defaultValues);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  TemplatesCompanion toCompanion(bool nullToAbsent) {
+    return TemplatesCompanion(
+      id: Value(id),
+      workspaceId: Value(workspaceId),
+      name: Value(name),
+      icon: Value(icon),
+      description: description == null && nullToAbsent
+          ? const Value.absent()
+          : Value(description),
+      propertyIds: Value(propertyIds),
+      defaultValues: Value(defaultValues),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory Template.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Template(
+      id: serializer.fromJson<String>(json['id']),
+      workspaceId: serializer.fromJson<String>(json['workspaceId']),
+      name: serializer.fromJson<String>(json['name']),
+      icon: serializer.fromJson<String>(json['icon']),
+      description: serializer.fromJson<String?>(json['description']),
+      propertyIds: serializer.fromJson<String>(json['propertyIds']),
+      defaultValues: serializer.fromJson<String>(json['defaultValues']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'workspaceId': serializer.toJson<String>(workspaceId),
+      'name': serializer.toJson<String>(name),
+      'icon': serializer.toJson<String>(icon),
+      'description': serializer.toJson<String?>(description),
+      'propertyIds': serializer.toJson<String>(propertyIds),
+      'defaultValues': serializer.toJson<String>(defaultValues),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  Template copyWith({
+    String? id,
+    String? workspaceId,
+    String? name,
+    String? icon,
+    Value<String?> description = const Value.absent(),
+    String? propertyIds,
+    String? defaultValues,
+    DateTime? createdAt,
+  }) => Template(
+    id: id ?? this.id,
+    workspaceId: workspaceId ?? this.workspaceId,
+    name: name ?? this.name,
+    icon: icon ?? this.icon,
+    description: description.present ? description.value : this.description,
+    propertyIds: propertyIds ?? this.propertyIds,
+    defaultValues: defaultValues ?? this.defaultValues,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  Template copyWithCompanion(TemplatesCompanion data) {
+    return Template(
+      id: data.id.present ? data.id.value : this.id,
+      workspaceId: data.workspaceId.present
+          ? data.workspaceId.value
+          : this.workspaceId,
+      name: data.name.present ? data.name.value : this.name,
+      icon: data.icon.present ? data.icon.value : this.icon,
+      description: data.description.present
+          ? data.description.value
+          : this.description,
+      propertyIds: data.propertyIds.present
+          ? data.propertyIds.value
+          : this.propertyIds,
+      defaultValues: data.defaultValues.present
+          ? data.defaultValues.value
+          : this.defaultValues,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Template(')
+          ..write('id: $id, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('name: $name, ')
+          ..write('icon: $icon, ')
+          ..write('description: $description, ')
+          ..write('propertyIds: $propertyIds, ')
+          ..write('defaultValues: $defaultValues, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    workspaceId,
+    name,
+    icon,
+    description,
+    propertyIds,
+    defaultValues,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Template &&
+          other.id == this.id &&
+          other.workspaceId == this.workspaceId &&
+          other.name == this.name &&
+          other.icon == this.icon &&
+          other.description == this.description &&
+          other.propertyIds == this.propertyIds &&
+          other.defaultValues == this.defaultValues &&
+          other.createdAt == this.createdAt);
+}
+
+class TemplatesCompanion extends UpdateCompanion<Template> {
+  final Value<String> id;
+  final Value<String> workspaceId;
+  final Value<String> name;
+  final Value<String> icon;
+  final Value<String?> description;
+  final Value<String> propertyIds;
+  final Value<String> defaultValues;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const TemplatesCompanion({
+    this.id = const Value.absent(),
+    this.workspaceId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.icon = const Value.absent(),
+    this.description = const Value.absent(),
+    this.propertyIds = const Value.absent(),
+    this.defaultValues = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TemplatesCompanion.insert({
+    required String id,
+    this.workspaceId = const Value.absent(),
+    required String name,
+    this.icon = const Value.absent(),
+    this.description = const Value.absent(),
+    this.propertyIds = const Value.absent(),
+    this.defaultValues = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name);
+  static Insertable<Template> custom({
+    Expression<String>? id,
+    Expression<String>? workspaceId,
+    Expression<String>? name,
+    Expression<String>? icon,
+    Expression<String>? description,
+    Expression<String>? propertyIds,
+    Expression<String>? defaultValues,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (workspaceId != null) 'workspace_id': workspaceId,
+      if (name != null) 'name': name,
+      if (icon != null) 'icon': icon,
+      if (description != null) 'description': description,
+      if (propertyIds != null) 'property_ids': propertyIds,
+      if (defaultValues != null) 'default_values': defaultValues,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TemplatesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? workspaceId,
+    Value<String>? name,
+    Value<String>? icon,
+    Value<String?>? description,
+    Value<String>? propertyIds,
+    Value<String>? defaultValues,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return TemplatesCompanion(
+      id: id ?? this.id,
+      workspaceId: workspaceId ?? this.workspaceId,
+      name: name ?? this.name,
+      icon: icon ?? this.icon,
+      description: description ?? this.description,
+      propertyIds: propertyIds ?? this.propertyIds,
+      defaultValues: defaultValues ?? this.defaultValues,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (workspaceId.present) {
+      map['workspace_id'] = Variable<String>(workspaceId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (icon.present) {
+      map['icon'] = Variable<String>(icon.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (propertyIds.present) {
+      map['property_ids'] = Variable<String>(propertyIds.value);
+    }
+    if (defaultValues.present) {
+      map['default_values'] = Variable<String>(defaultValues.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TemplatesCompanion(')
+          ..write('id: $id, ')
+          ..write('workspaceId: $workspaceId, ')
+          ..write('name: $name, ')
+          ..write('icon: $icon, ')
+          ..write('description: $description, ')
+          ..write('propertyIds: $propertyIds, ')
+          ..write('defaultValues: $defaultValues, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2940,6 +5177,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     this,
   );
   late final $AttachmentsTable attachments = $AttachmentsTable(this);
+  late final $WorkspacesTable workspaces = $WorkspacesTable(this);
+  late final $PropertyDefinitionsTable propertyDefinitions =
+      $PropertyDefinitionsTable(this);
+  late final $EntryPropertiesTable entryProperties = $EntryPropertiesTable(
+    this,
+  );
+  late final $TemplatesTable templates = $TemplatesTable(this);
   late final EntryDao entryDao = EntryDao(this as AppDatabase);
   late final TagDao tagDao = TagDao(this as AppDatabase);
   late final ContainerDao containerDao = ContainerDao(this as AppDatabase);
@@ -2955,6 +5199,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     containers,
     entryContainers,
     attachments,
+    workspaces,
+    propertyDefinitions,
+    entryProperties,
+    templates,
   ];
 }
 
@@ -2976,6 +5224,9 @@ typedef $$EntriesTableCreateCompanionBuilder =
       Value<Uint8List?> embedding,
       Value<DateTime?> aiEnrichedAt,
       Value<String?> lang,
+      Value<String> workspaceId,
+      Value<String?> notes,
+      Value<int?> playbackPositionMs,
       Value<int> rowid,
     });
 typedef $$EntriesTableUpdateCompanionBuilder =
@@ -2996,6 +5247,9 @@ typedef $$EntriesTableUpdateCompanionBuilder =
       Value<Uint8List?> embedding,
       Value<DateTime?> aiEnrichedAt,
       Value<String?> lang,
+      Value<String> workspaceId,
+      Value<String?> notes,
+      Value<int?> playbackPositionMs,
       Value<int> rowid,
     });
 
@@ -3085,6 +5339,21 @@ class $$EntriesTableFilterComposer
 
   ColumnFilters<String> get lang => $composableBuilder(
     column: $table.lang,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get playbackPositionMs => $composableBuilder(
+    column: $table.playbackPositionMs,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -3177,6 +5446,21 @@ class $$EntriesTableOrderingComposer
     column: $table.lang,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get playbackPositionMs => $composableBuilder(
+    column: $table.playbackPositionMs,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$EntriesTableAnnotationComposer
@@ -3239,6 +5523,19 @@ class $$EntriesTableAnnotationComposer
 
   GeneratedColumn<String> get lang =>
       $composableBuilder(column: $table.lang, builder: (column) => column);
+
+  GeneratedColumn<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get notes =>
+      $composableBuilder(column: $table.notes, builder: (column) => column);
+
+  GeneratedColumn<int> get playbackPositionMs => $composableBuilder(
+    column: $table.playbackPositionMs,
+    builder: (column) => column,
+  );
 }
 
 class $$EntriesTableTableManager
@@ -3285,6 +5582,9 @@ class $$EntriesTableTableManager
                 Value<Uint8List?> embedding = const Value.absent(),
                 Value<DateTime?> aiEnrichedAt = const Value.absent(),
                 Value<String?> lang = const Value.absent(),
+                Value<String> workspaceId = const Value.absent(),
+                Value<String?> notes = const Value.absent(),
+                Value<int?> playbackPositionMs = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => EntriesCompanion(
                 id: id,
@@ -3303,6 +5603,9 @@ class $$EntriesTableTableManager
                 embedding: embedding,
                 aiEnrichedAt: aiEnrichedAt,
                 lang: lang,
+                workspaceId: workspaceId,
+                notes: notes,
+                playbackPositionMs: playbackPositionMs,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -3323,6 +5626,9 @@ class $$EntriesTableTableManager
                 Value<Uint8List?> embedding = const Value.absent(),
                 Value<DateTime?> aiEnrichedAt = const Value.absent(),
                 Value<String?> lang = const Value.absent(),
+                Value<String> workspaceId = const Value.absent(),
+                Value<String?> notes = const Value.absent(),
+                Value<int?> playbackPositionMs = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => EntriesCompanion.insert(
                 id: id,
@@ -3341,6 +5647,9 @@ class $$EntriesTableTableManager
                 embedding: embedding,
                 aiEnrichedAt: aiEnrichedAt,
                 lang: lang,
+                workspaceId: workspaceId,
+                notes: notes,
+                playbackPositionMs: playbackPositionMs,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -3372,6 +5681,7 @@ typedef $$TagsTableCreateCompanionBuilder =
       Value<String?> parentId,
       Value<String?> color,
       Value<String?> icon,
+      Value<String> workspaceId,
       Value<int> rowid,
     });
 typedef $$TagsTableUpdateCompanionBuilder =
@@ -3381,6 +5691,7 @@ typedef $$TagsTableUpdateCompanionBuilder =
       Value<String?> parentId,
       Value<String?> color,
       Value<String?> icon,
+      Value<String> workspaceId,
       Value<int> rowid,
     });
 
@@ -3414,6 +5725,11 @@ class $$TagsTableFilterComposer extends Composer<_$AppDatabase, $TagsTable> {
 
   ColumnFilters<String> get icon => $composableBuilder(
     column: $table.icon,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -3450,6 +5766,11 @@ class $$TagsTableOrderingComposer extends Composer<_$AppDatabase, $TagsTable> {
     column: $table.icon,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$TagsTableAnnotationComposer
@@ -3475,6 +5796,11 @@ class $$TagsTableAnnotationComposer
 
   GeneratedColumn<String> get icon =>
       $composableBuilder(column: $table.icon, builder: (column) => column);
+
+  GeneratedColumn<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => column,
+  );
 }
 
 class $$TagsTableTableManager
@@ -3510,6 +5836,7 @@ class $$TagsTableTableManager
                 Value<String?> parentId = const Value.absent(),
                 Value<String?> color = const Value.absent(),
                 Value<String?> icon = const Value.absent(),
+                Value<String> workspaceId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TagsCompanion(
                 id: id,
@@ -3517,6 +5844,7 @@ class $$TagsTableTableManager
                 parentId: parentId,
                 color: color,
                 icon: icon,
+                workspaceId: workspaceId,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -3526,6 +5854,7 @@ class $$TagsTableTableManager
                 Value<String?> parentId = const Value.absent(),
                 Value<String?> color = const Value.absent(),
                 Value<String?> icon = const Value.absent(),
+                Value<String> workspaceId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TagsCompanion.insert(
                 id: id,
@@ -3533,6 +5862,7 @@ class $$TagsTableTableManager
                 parentId: parentId,
                 color: color,
                 icon: icon,
+                workspaceId: workspaceId,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -3705,6 +6035,11 @@ typedef $$ContainersTableCreateCompanionBuilder =
       Value<DateTime> createdAt,
       Value<bool> archived,
       Value<String?> filterJson,
+      Value<String> workspaceId,
+      Value<String?> parentId,
+      Value<int> sortOrder,
+      Value<bool> isSmartFilter,
+      Value<String?> smartFilterQuery,
       Value<int> rowid,
     });
 typedef $$ContainersTableUpdateCompanionBuilder =
@@ -3718,6 +6053,11 @@ typedef $$ContainersTableUpdateCompanionBuilder =
       Value<DateTime> createdAt,
       Value<bool> archived,
       Value<String?> filterJson,
+      Value<String> workspaceId,
+      Value<String?> parentId,
+      Value<int> sortOrder,
+      Value<bool> isSmartFilter,
+      Value<String?> smartFilterQuery,
       Value<int> rowid,
     });
 
@@ -3772,6 +6112,31 @@ class $$ContainersTableFilterComposer
 
   ColumnFilters<String> get filterJson => $composableBuilder(
     column: $table.filterJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isSmartFilter => $composableBuilder(
+    column: $table.isSmartFilter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get smartFilterQuery => $composableBuilder(
+    column: $table.smartFilterQuery,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -3829,6 +6194,31 @@ class $$ContainersTableOrderingComposer
     column: $table.filterJson,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get parentId => $composableBuilder(
+    column: $table.parentId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isSmartFilter => $composableBuilder(
+    column: $table.isSmartFilter,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get smartFilterQuery => $composableBuilder(
+    column: $table.smartFilterQuery,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$ContainersTableAnnotationComposer
@@ -3868,6 +6258,27 @@ class $$ContainersTableAnnotationComposer
 
   GeneratedColumn<String> get filterJson => $composableBuilder(
     column: $table.filterJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get parentId =>
+      $composableBuilder(column: $table.parentId, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<bool> get isSmartFilter => $composableBuilder(
+    column: $table.isSmartFilter,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get smartFilterQuery => $composableBuilder(
+    column: $table.smartFilterQuery,
     builder: (column) => column,
   );
 }
@@ -3912,6 +6323,11 @@ class $$ContainersTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 Value<String?> filterJson = const Value.absent(),
+                Value<String> workspaceId = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<bool> isSmartFilter = const Value.absent(),
+                Value<String?> smartFilterQuery = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ContainersCompanion(
                 id: id,
@@ -3923,6 +6339,11 @@ class $$ContainersTableTableManager
                 createdAt: createdAt,
                 archived: archived,
                 filterJson: filterJson,
+                workspaceId: workspaceId,
+                parentId: parentId,
+                sortOrder: sortOrder,
+                isSmartFilter: isSmartFilter,
+                smartFilterQuery: smartFilterQuery,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -3936,6 +6357,11 @@ class $$ContainersTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 Value<String?> filterJson = const Value.absent(),
+                Value<String> workspaceId = const Value.absent(),
+                Value<String?> parentId = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<bool> isSmartFilter = const Value.absent(),
+                Value<String?> smartFilterQuery = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ContainersCompanion.insert(
                 id: id,
@@ -3947,6 +6373,11 @@ class $$ContainersTableTableManager
                 createdAt: createdAt,
                 archived: archived,
                 filterJson: filterJson,
+                workspaceId: workspaceId,
+                parentId: parentId,
+                sortOrder: sortOrder,
+                isSmartFilter: isSmartFilter,
+                smartFilterQuery: smartFilterQuery,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -4421,6 +6852,924 @@ typedef $$AttachmentsTableProcessedTableManager =
       Attachment,
       PrefetchHooks Function()
     >;
+typedef $$WorkspacesTableCreateCompanionBuilder =
+    WorkspacesCompanion Function({
+      required String id,
+      required String name,
+      Value<String> icon,
+      Value<String> color,
+      Value<bool> isDefault,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+typedef $$WorkspacesTableUpdateCompanionBuilder =
+    WorkspacesCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<String> icon,
+      Value<String> color,
+      Value<bool> isDefault,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$WorkspacesTableFilterComposer
+    extends Composer<_$AppDatabase, $WorkspacesTable> {
+  $$WorkspacesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get icon => $composableBuilder(
+    column: $table.icon,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get color => $composableBuilder(
+    column: $table.color,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isDefault => $composableBuilder(
+    column: $table.isDefault,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$WorkspacesTableOrderingComposer
+    extends Composer<_$AppDatabase, $WorkspacesTable> {
+  $$WorkspacesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get icon => $composableBuilder(
+    column: $table.icon,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get color => $composableBuilder(
+    column: $table.color,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isDefault => $composableBuilder(
+    column: $table.isDefault,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$WorkspacesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $WorkspacesTable> {
+  $$WorkspacesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get icon =>
+      $composableBuilder(column: $table.icon, builder: (column) => column);
+
+  GeneratedColumn<String> get color =>
+      $composableBuilder(column: $table.color, builder: (column) => column);
+
+  GeneratedColumn<bool> get isDefault =>
+      $composableBuilder(column: $table.isDefault, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$WorkspacesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $WorkspacesTable,
+          Workspace,
+          $$WorkspacesTableFilterComposer,
+          $$WorkspacesTableOrderingComposer,
+          $$WorkspacesTableAnnotationComposer,
+          $$WorkspacesTableCreateCompanionBuilder,
+          $$WorkspacesTableUpdateCompanionBuilder,
+          (
+            Workspace,
+            BaseReferences<_$AppDatabase, $WorkspacesTable, Workspace>,
+          ),
+          Workspace,
+          PrefetchHooks Function()
+        > {
+  $$WorkspacesTableTableManager(_$AppDatabase db, $WorkspacesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$WorkspacesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$WorkspacesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$WorkspacesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> icon = const Value.absent(),
+                Value<String> color = const Value.absent(),
+                Value<bool> isDefault = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => WorkspacesCompanion(
+                id: id,
+                name: name,
+                icon: icon,
+                color: color,
+                isDefault: isDefault,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                Value<String> icon = const Value.absent(),
+                Value<String> color = const Value.absent(),
+                Value<bool> isDefault = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => WorkspacesCompanion.insert(
+                id: id,
+                name: name,
+                icon: icon,
+                color: color,
+                isDefault: isDefault,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$WorkspacesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $WorkspacesTable,
+      Workspace,
+      $$WorkspacesTableFilterComposer,
+      $$WorkspacesTableOrderingComposer,
+      $$WorkspacesTableAnnotationComposer,
+      $$WorkspacesTableCreateCompanionBuilder,
+      $$WorkspacesTableUpdateCompanionBuilder,
+      (Workspace, BaseReferences<_$AppDatabase, $WorkspacesTable, Workspace>),
+      Workspace,
+      PrefetchHooks Function()
+    >;
+typedef $$PropertyDefinitionsTableCreateCompanionBuilder =
+    PropertyDefinitionsCompanion Function({
+      required String id,
+      Value<String> workspaceId,
+      required String name,
+      required String fieldType,
+      Value<String?> options,
+      Value<int> sortOrder,
+      Value<String?> templateId,
+      Value<int> rowid,
+    });
+typedef $$PropertyDefinitionsTableUpdateCompanionBuilder =
+    PropertyDefinitionsCompanion Function({
+      Value<String> id,
+      Value<String> workspaceId,
+      Value<String> name,
+      Value<String> fieldType,
+      Value<String?> options,
+      Value<int> sortOrder,
+      Value<String?> templateId,
+      Value<int> rowid,
+    });
+
+class $$PropertyDefinitionsTableFilterComposer
+    extends Composer<_$AppDatabase, $PropertyDefinitionsTable> {
+  $$PropertyDefinitionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fieldType => $composableBuilder(
+    column: $table.fieldType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get options => $composableBuilder(
+    column: $table.options,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get templateId => $composableBuilder(
+    column: $table.templateId,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PropertyDefinitionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $PropertyDefinitionsTable> {
+  $$PropertyDefinitionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fieldType => $composableBuilder(
+    column: $table.fieldType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get options => $composableBuilder(
+    column: $table.options,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get templateId => $composableBuilder(
+    column: $table.templateId,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PropertyDefinitionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PropertyDefinitionsTable> {
+  $$PropertyDefinitionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get fieldType =>
+      $composableBuilder(column: $table.fieldType, builder: (column) => column);
+
+  GeneratedColumn<String> get options =>
+      $composableBuilder(column: $table.options, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<String> get templateId => $composableBuilder(
+    column: $table.templateId,
+    builder: (column) => column,
+  );
+}
+
+class $$PropertyDefinitionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PropertyDefinitionsTable,
+          PropertyDefinition,
+          $$PropertyDefinitionsTableFilterComposer,
+          $$PropertyDefinitionsTableOrderingComposer,
+          $$PropertyDefinitionsTableAnnotationComposer,
+          $$PropertyDefinitionsTableCreateCompanionBuilder,
+          $$PropertyDefinitionsTableUpdateCompanionBuilder,
+          (
+            PropertyDefinition,
+            BaseReferences<
+              _$AppDatabase,
+              $PropertyDefinitionsTable,
+              PropertyDefinition
+            >,
+          ),
+          PropertyDefinition,
+          PrefetchHooks Function()
+        > {
+  $$PropertyDefinitionsTableTableManager(
+    _$AppDatabase db,
+    $PropertyDefinitionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PropertyDefinitionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PropertyDefinitionsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$PropertyDefinitionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> workspaceId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> fieldType = const Value.absent(),
+                Value<String?> options = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<String?> templateId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PropertyDefinitionsCompanion(
+                id: id,
+                workspaceId: workspaceId,
+                name: name,
+                fieldType: fieldType,
+                options: options,
+                sortOrder: sortOrder,
+                templateId: templateId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<String> workspaceId = const Value.absent(),
+                required String name,
+                required String fieldType,
+                Value<String?> options = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<String?> templateId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PropertyDefinitionsCompanion.insert(
+                id: id,
+                workspaceId: workspaceId,
+                name: name,
+                fieldType: fieldType,
+                options: options,
+                sortOrder: sortOrder,
+                templateId: templateId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PropertyDefinitionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PropertyDefinitionsTable,
+      PropertyDefinition,
+      $$PropertyDefinitionsTableFilterComposer,
+      $$PropertyDefinitionsTableOrderingComposer,
+      $$PropertyDefinitionsTableAnnotationComposer,
+      $$PropertyDefinitionsTableCreateCompanionBuilder,
+      $$PropertyDefinitionsTableUpdateCompanionBuilder,
+      (
+        PropertyDefinition,
+        BaseReferences<
+          _$AppDatabase,
+          $PropertyDefinitionsTable,
+          PropertyDefinition
+        >,
+      ),
+      PropertyDefinition,
+      PrefetchHooks Function()
+    >;
+typedef $$EntryPropertiesTableCreateCompanionBuilder =
+    EntryPropertiesCompanion Function({
+      required String id,
+      required String entryId,
+      required String propertyId,
+      Value<String?> value,
+      Value<int> rowid,
+    });
+typedef $$EntryPropertiesTableUpdateCompanionBuilder =
+    EntryPropertiesCompanion Function({
+      Value<String> id,
+      Value<String> entryId,
+      Value<String> propertyId,
+      Value<String?> value,
+      Value<int> rowid,
+    });
+
+class $$EntryPropertiesTableFilterComposer
+    extends Composer<_$AppDatabase, $EntryPropertiesTable> {
+  $$EntryPropertiesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entryId => $composableBuilder(
+    column: $table.entryId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get propertyId => $composableBuilder(
+    column: $table.propertyId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$EntryPropertiesTableOrderingComposer
+    extends Composer<_$AppDatabase, $EntryPropertiesTable> {
+  $$EntryPropertiesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entryId => $composableBuilder(
+    column: $table.entryId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get propertyId => $composableBuilder(
+    column: $table.propertyId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$EntryPropertiesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $EntryPropertiesTable> {
+  $$EntryPropertiesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get entryId =>
+      $composableBuilder(column: $table.entryId, builder: (column) => column);
+
+  GeneratedColumn<String> get propertyId => $composableBuilder(
+    column: $table.propertyId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get value =>
+      $composableBuilder(column: $table.value, builder: (column) => column);
+}
+
+class $$EntryPropertiesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $EntryPropertiesTable,
+          EntryProperty,
+          $$EntryPropertiesTableFilterComposer,
+          $$EntryPropertiesTableOrderingComposer,
+          $$EntryPropertiesTableAnnotationComposer,
+          $$EntryPropertiesTableCreateCompanionBuilder,
+          $$EntryPropertiesTableUpdateCompanionBuilder,
+          (
+            EntryProperty,
+            BaseReferences<_$AppDatabase, $EntryPropertiesTable, EntryProperty>,
+          ),
+          EntryProperty,
+          PrefetchHooks Function()
+        > {
+  $$EntryPropertiesTableTableManager(
+    _$AppDatabase db,
+    $EntryPropertiesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$EntryPropertiesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$EntryPropertiesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$EntryPropertiesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> entryId = const Value.absent(),
+                Value<String> propertyId = const Value.absent(),
+                Value<String?> value = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => EntryPropertiesCompanion(
+                id: id,
+                entryId: entryId,
+                propertyId: propertyId,
+                value: value,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String entryId,
+                required String propertyId,
+                Value<String?> value = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => EntryPropertiesCompanion.insert(
+                id: id,
+                entryId: entryId,
+                propertyId: propertyId,
+                value: value,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$EntryPropertiesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $EntryPropertiesTable,
+      EntryProperty,
+      $$EntryPropertiesTableFilterComposer,
+      $$EntryPropertiesTableOrderingComposer,
+      $$EntryPropertiesTableAnnotationComposer,
+      $$EntryPropertiesTableCreateCompanionBuilder,
+      $$EntryPropertiesTableUpdateCompanionBuilder,
+      (
+        EntryProperty,
+        BaseReferences<_$AppDatabase, $EntryPropertiesTable, EntryProperty>,
+      ),
+      EntryProperty,
+      PrefetchHooks Function()
+    >;
+typedef $$TemplatesTableCreateCompanionBuilder =
+    TemplatesCompanion Function({
+      required String id,
+      Value<String> workspaceId,
+      required String name,
+      Value<String> icon,
+      Value<String?> description,
+      Value<String> propertyIds,
+      Value<String> defaultValues,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+typedef $$TemplatesTableUpdateCompanionBuilder =
+    TemplatesCompanion Function({
+      Value<String> id,
+      Value<String> workspaceId,
+      Value<String> name,
+      Value<String> icon,
+      Value<String?> description,
+      Value<String> propertyIds,
+      Value<String> defaultValues,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$TemplatesTableFilterComposer
+    extends Composer<_$AppDatabase, $TemplatesTable> {
+  $$TemplatesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get icon => $composableBuilder(
+    column: $table.icon,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get propertyIds => $composableBuilder(
+    column: $table.propertyIds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get defaultValues => $composableBuilder(
+    column: $table.defaultValues,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$TemplatesTableOrderingComposer
+    extends Composer<_$AppDatabase, $TemplatesTable> {
+  $$TemplatesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get icon => $composableBuilder(
+    column: $table.icon,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get propertyIds => $composableBuilder(
+    column: $table.propertyIds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get defaultValues => $composableBuilder(
+    column: $table.defaultValues,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$TemplatesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TemplatesTable> {
+  $$TemplatesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get icon =>
+      $composableBuilder(column: $table.icon, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get propertyIds => $composableBuilder(
+    column: $table.propertyIds,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get defaultValues => $composableBuilder(
+    column: $table.defaultValues,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$TemplatesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TemplatesTable,
+          Template,
+          $$TemplatesTableFilterComposer,
+          $$TemplatesTableOrderingComposer,
+          $$TemplatesTableAnnotationComposer,
+          $$TemplatesTableCreateCompanionBuilder,
+          $$TemplatesTableUpdateCompanionBuilder,
+          (Template, BaseReferences<_$AppDatabase, $TemplatesTable, Template>),
+          Template,
+          PrefetchHooks Function()
+        > {
+  $$TemplatesTableTableManager(_$AppDatabase db, $TemplatesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TemplatesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TemplatesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TemplatesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> workspaceId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> icon = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                Value<String> propertyIds = const Value.absent(),
+                Value<String> defaultValues = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TemplatesCompanion(
+                id: id,
+                workspaceId: workspaceId,
+                name: name,
+                icon: icon,
+                description: description,
+                propertyIds: propertyIds,
+                defaultValues: defaultValues,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<String> workspaceId = const Value.absent(),
+                required String name,
+                Value<String> icon = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                Value<String> propertyIds = const Value.absent(),
+                Value<String> defaultValues = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TemplatesCompanion.insert(
+                id: id,
+                workspaceId: workspaceId,
+                name: name,
+                icon: icon,
+                description: description,
+                propertyIds: propertyIds,
+                defaultValues: defaultValues,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$TemplatesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TemplatesTable,
+      Template,
+      $$TemplatesTableFilterComposer,
+      $$TemplatesTableOrderingComposer,
+      $$TemplatesTableAnnotationComposer,
+      $$TemplatesTableCreateCompanionBuilder,
+      $$TemplatesTableUpdateCompanionBuilder,
+      (Template, BaseReferences<_$AppDatabase, $TemplatesTable, Template>),
+      Template,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -4436,4 +7785,12 @@ class $AppDatabaseManager {
       $$EntryContainersTableTableManager(_db, _db.entryContainers);
   $$AttachmentsTableTableManager get attachments =>
       $$AttachmentsTableTableManager(_db, _db.attachments);
+  $$WorkspacesTableTableManager get workspaces =>
+      $$WorkspacesTableTableManager(_db, _db.workspaces);
+  $$PropertyDefinitionsTableTableManager get propertyDefinitions =>
+      $$PropertyDefinitionsTableTableManager(_db, _db.propertyDefinitions);
+  $$EntryPropertiesTableTableManager get entryProperties =>
+      $$EntryPropertiesTableTableManager(_db, _db.entryProperties);
+  $$TemplatesTableTableManager get templates =>
+      $$TemplatesTableTableManager(_db, _db.templates);
 }

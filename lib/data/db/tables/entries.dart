@@ -26,6 +26,9 @@ enum EntryType {
   /// Audioaufnahme mit Transkription (Phase 2)
   audio,
 
+  /// Videoaufnahme oder geteiltes Video (Phase 3)
+  video,
+
   /// Gemischte Inhalte (Text + Anhänge)
   mixed
 }
@@ -102,6 +105,21 @@ class Entries extends Table {
 
   /// ISO-639-1-Sprachcode, erkannt von ML Kit Language ID (Phase 3).
   TextColumn get lang => text().nullable()();
+
+  // ── Phase 3: Workspace, Notizen, Wiedergabe-Position ─────────────────────
+
+  /// Workspace-Zugehörigkeit. Alle bestehenden Einträge erhalten beim
+  /// Migrations-Upgrade automatisch den Wert 'default'.
+  TextColumn get workspaceId =>
+      text().withDefault(const Constant('default'))();
+
+  /// Persönliche Anmerkungen des Nutzers – getrennt vom ursprünglichen Body.
+  /// Vergleichbar mit Annotationen in einer Lese-App.
+  TextColumn get notes => text().nullable()();
+
+  /// Letzte Wiedergabe-Position für Audio/Video in Millisekunden.
+  /// Null = noch nicht abgespielt oder am Anfang.
+  IntColumn get playbackPositionMs => integer().nullable()();
 
   // WARUM Set<Column> statt @primaryKey-Annotation auf der Spalte?
   // Drift verlangt bei TEXT-PKs den Override von primaryKey als Set.

@@ -30,6 +30,10 @@ class Tags extends Table {
   /// Material-Icon-Name oder eigener Bezeichner. Null = Standard-Tag-Icon.
   TextColumn get icon => text().nullable()();
 
+  /// Workspace-Zugehörigkeit.
+  TextColumn get workspaceId =>
+      text().withDefault(const Constant('default'))();
+
   @override
   Set<Column> get primaryKey => {id};
 }

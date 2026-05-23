@@ -12,7 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:just_audio/just_audio.dart';
+import 'package:media_kit/media_kit.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -318,7 +318,12 @@ class _ImageGallery extends StatelessWidget {
 
 // ── Audio-Player ──────────────────────────────────────────────────────────────
 
-/// Einfacher Play/Pause-Player für einen Audio-Anhang.
+/// Play/Pause-Player für einen Audio-Anhang (media_kit-basiert).
+///
+/// WARUM media_kit statt just_audio?
+/// media_kit unterstützt einheitlich Audio und Video, hat einen aktiv
+/// gepflegten Android-Backend und ermöglicht Resume-Funktionalität
+/// über player.state.position.
 class _AudioPlayerWidget extends StatefulWidget {
   final Attachment attachment;
 
@@ -329,12 +334,13 @@ class _AudioPlayerWidget extends StatefulWidget {
 }
 
 class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
-  final AudioPlayer _player = AudioPlayer();
+  late final Player _player;
   bool _isLoaded = false;
 
   @override
   void initState() {
     super.initState();
+    _player = Player();
     _loadAudio();
   }
 
@@ -347,20 +353,24 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
   Future<void> _loadAudio() async {
     try {
       final appDir = await getApplicationDocumentsDirectory();
-      final path = p.join(appDir.path, 'attachments', widget.attachment.filePath);
-      await _player.setFilePath(path);
+      final path =
+          p.join(appDir.path, 'attachments', widget.attachment.filePath);
+      await _player.open(Media(Uri.file(path).toString()), play: false);
       if (mounted) setState(() => _isLoaded = true);
     } catch (_) {
       // Datei nicht lesbar – Player bleibt deaktiviert.
     }
   }
 
+  String _formatDuration(Duration d) {
+    final m = d.inMinutes.toString().padLeft(2, '0');
+    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
   String _formatMs(int? ms) {
     if (ms == null) return '--:--';
-    final total = ms ~/ 1000;
-    final m = (total ~/ 60).toString().padLeft(2, '0');
-    final s = (total % 60).toString().padLeft(2, '0');
-    return '$m:$s';
+    return _formatDuration(Duration(milliseconds: ms));
   }
 
   @override
@@ -375,112 +385,102 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
       ),
       child: Row(
         children: [
-          // Play/Pause-Button
-          StreamBuilder<PlayerState>(
-            stream: _player.playerStateStream,
-            builder: (context, snapshot) {
-              final playing = snapshot.data?.playing ?? false;
-              final completed = snapshot.data?.processingState ==
-                  ProcessingState.completed;
+          // Play/Pause/Replay-Button
+          StreamBuilder<bool>(
+            stream: _player.stream.playing,
+            builder: (context, playSnap) {
+              return StreamBuilder<bool>(
+                stream: _player.stream.completed,
+                builder: (context, compSnap) {
+                  final playing = playSnap.data ?? false;
+                  final completed = compSnap.data ?? false;
 
-              return IconButton(
-                icon: Icon(
-                  completed
-                      ? Icons.replay
-                      : playing
-                          ? Icons.pause_circle_filled
-                          : Icons.play_circle_filled,
-                  size: 36,
-                  color: theme.colorScheme.onSecondaryContainer,
-                ),
-                onPressed: _isLoaded
-                    ? () async {
-                        if (completed) {
-                          await _player.seek(Duration.zero);
-                          await _player.play();
-                        } else if (playing) {
-                          await _player.pause();
-                        } else {
-                          await _player.play();
-                        }
-                      }
-                    : null,
+                  return IconButton(
+                    icon: Icon(
+                      completed
+                          ? Icons.replay
+                          : playing
+                              ? Icons.pause_circle_filled
+                              : Icons.play_circle_filled,
+                      size: 36,
+                      color: theme.colorScheme.onSecondaryContainer,
+                    ),
+                    onPressed: _isLoaded
+                        ? () async {
+                            if (completed) {
+                              await _player.seek(Duration.zero);
+                              await _player.play();
+                            } else if (playing) {
+                              await _player.pause();
+                            } else {
+                              await _player.play();
+                            }
+                          }
+                        : null,
+                  );
+                },
               );
             },
           ),
 
           const SizedBox(width: 8),
 
-          // Fortschrittsanzeige
+          // Seeker + Zeitanzeige
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Seeker
-                StreamBuilder<Duration>(
-                  stream: _player.positionStream,
-                  builder: (context, posSnap) {
-                    final position = posSnap.data ?? Duration.zero;
-                    final duration =
-                        _player.duration ?? Duration.zero;
-                    final progress = duration.inMilliseconds > 0
-                        ? position.inMilliseconds /
-                            duration.inMilliseconds
-                        : 0.0;
+            child: StreamBuilder<Duration>(
+              stream: _player.stream.position,
+              builder: (context, posSnap) {
+                final position = posSnap.data ?? Duration.zero;
+                final duration = _player.state.duration;
+                final progress = duration.inMilliseconds > 0
+                    ? (position.inMilliseconds / duration.inMilliseconds)
+                        .clamp(0.0, 1.0)
+                    : 0.0;
 
-                    return Column(
+                return Column(
+                  children: [
+                    SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        trackHeight: 3,
+                        thumbShape: const RoundSliderThumbShape(
+                          enabledThumbRadius: 6,
+                        ),
+                      ),
+                      child: Slider(
+                        value: progress,
+                        onChanged: _isLoaded
+                            ? (v) => _player.seek(
+                                  Duration(
+                                    milliseconds:
+                                        (v * duration.inMilliseconds).round(),
+                                  ),
+                                )
+                            : null,
+                        activeColor: theme.colorScheme.onSecondaryContainer,
+                        inactiveColor: theme.colorScheme.onSecondaryContainer
+                            .withAlpha(64),
+                      ),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        SliderTheme(
-                          data: SliderTheme.of(context).copyWith(
-                            trackHeight: 3,
-                            thumbShape: const RoundSliderThumbShape(
-                              enabledThumbRadius: 6,
-                            ),
-                          ),
-                          child: Slider(
-                            value: progress.clamp(0.0, 1.0),
-                            onChanged: _isLoaded
-                                ? (v) => _player.seek(
-                                      Duration(
-                                        milliseconds: (v *
-                                                duration.inMilliseconds)
-                                            .round(),
-                                      ),
-                                    )
-                                : null,
-                            activeColor:
-                                theme.colorScheme.onSecondaryContainer,
-                            inactiveColor: theme.colorScheme
-                                .onSecondaryContainer
-                                .withAlpha(64),
+                        Text(
+                          _formatDuration(position),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSecondaryContainer,
                           ),
                         ),
-                        // Zeit-Anzeige
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              '${position.inMinutes.toString().padLeft(2, '0')}:'
-                              '${(position.inSeconds % 60).toString().padLeft(2, '0')}',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color:
-                                    theme.colorScheme.onSecondaryContainer,
-                              ),
-                            ),
-                            Text(
-                              _formatMs(widget.attachment.durationMs),
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color:
-                                    theme.colorScheme.onSecondaryContainer,
-                              ),
-                            ),
-                          ],
+                        Text(
+                          _formatMs(widget.attachment.durationMs),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSecondaryContainer,
+                          ),
                         ),
                       ],
-                    );
-                  },
-                ),
-              ],
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ],
