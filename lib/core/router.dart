@@ -14,6 +14,7 @@ import '../app_shell.dart';
 import '../features/feed/feed_screen.dart';
 import '../features/projects/projects_screen.dart';
 import '../features/areas/areas_screen.dart';
+import '../features/settings/settings_screen.dart';
 
 /// GoRouter als Riverpod-Provider.
 ///
@@ -29,6 +30,12 @@ final routerProvider = Provider<GoRouter>((ref) {
     // In der Produktion deaktivieren (Phase 7: Release-Build-Flag).
     debugLogDiagnostics: true,
     routes: [
+      // Einstellungen: Außerhalb der Shell → kein BottomAppBar sichtbar.
+      GoRoute(
+        path: AppRoutes.settings,
+        builder: (context, state) => const SettingsScreen(),
+      ),
+
       // StatefulShellRoute: Hält für jeden Tab einen eigenen NavigatorKey.
       // Beim Tab-Wechsel wird der vorherige Tab-Zustand bewahrt (z. B.
       // Scroll-Position im Feed, Drill-Down-Zustand in Projekten).

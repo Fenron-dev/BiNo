@@ -23,6 +23,7 @@ import '../data/repositories/attachment_repository.dart';
 import '../data/ml/ocr_service.dart';
 import '../data/ml/stt_service.dart';
 import '../services/attachment_service.dart';
+import '../services/backup_service.dart';
 import '../services/url_metadata_service.dart';
 
 // ── Datenbank ──────────────────────────────────────────────────────────────
@@ -83,6 +84,11 @@ final sttServiceProvider = Provider<SttService>((ref) {
 final urlMetadataServiceProvider = Provider<UrlMetadataService>((ref) {
   return UrlMetadataService();
 }, name: 'urlMetadataServiceProvider');
+
+/// BackupService: Export und Import der App-Daten als ZIP.
+final backupServiceProvider = Provider<BackupService>((ref) {
+  return BackupService(ref.watch(databaseProvider));
+}, name: 'backupServiceProvider');
 
 // ── Repositories ──────────────────────────────────────────────────────────
 

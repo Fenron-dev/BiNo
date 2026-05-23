@@ -33,8 +33,9 @@ abstract class AppRoutes {
   static const String projects = '/projects';
   static const String areas = '/areas';
 
-  // Phase 2+:
+  static const String settings = '/settings';
+
+  // Phase 3+:
   // static const String entryDetail = '/entry/:id';
-  // static const String settings = '/settings';
   // static const String search = '/search';
 }

@@ -8,7 +8,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../core/constants.dart';
 import 'feed_provider.dart';
 import 'entry_card.dart';
 
@@ -62,8 +64,16 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     final entriesAsync = ref.watch(feedEntriesProvider);
 
     return Scaffold(
-      // Phase 2: AppBar mit Suchfeld und Filter-Chips.
-      appBar: AppBar(title: const Text('Feed')),
+      appBar: AppBar(
+        title: const Text('Feed'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Einstellungen',
+            onPressed: () => context.push(AppRoutes.settings),
+          ),
+        ],
+      ),
       body: entriesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) => _ErrorView(
