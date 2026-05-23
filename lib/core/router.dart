@@ -14,6 +14,7 @@ import '../app_shell.dart';
 import '../features/feed/feed_screen.dart';
 import '../features/projects/projects_screen.dart';
 import '../features/areas/areas_screen.dart';
+import '../features/entry_detail/entry_detail_screen.dart';
 import '../features/settings/settings_screen.dart';
 
 /// GoRouter als Riverpod-Provider.
@@ -51,12 +52,21 @@ final routerProvider = Provider<GoRouter>((ref) {
           return AppShell(navigationShell: navigationShell);
         },
         branches: [
-          // Branch 0: Feed
+          // Branch 0: Feed + Entry-Detail (Subroute im Feed-Branch)
           StatefulShellBranch(
             routes: [
               GoRoute(
                 path: AppRoutes.feed,
                 builder: (context, state) => const FeedScreen(),
+                routes: [
+                  GoRoute(
+                    // Relativer Pfad → Vollpfad: /feed/detail/:id
+                    path: 'detail/:id',
+                    builder: (context, state) => EntryDetailScreen(
+                      entryId: state.pathParameters['id']!,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

@@ -11,15 +11,25 @@ import '../../core/di.dart';
 import '../../data/db/database.dart';
 
 /// Beobachtet alle Einträge als reaktiven Stream.
-///
-/// WARUM StreamProvider statt FutureProvider?
-/// Drift's watch()-Methoden geben Streams zurück, die bei jeder DB-Änderung
-/// automatisch einen neuen Wert emittieren. StreamProvider leitet das an
-/// den Widget-Tree weiter – kein manuelles Refresh nötig.
-///
-/// WARUM kein @riverpod (Code-Gen)?
-/// Code-Gen ist für diesen einfachen Fall unnötig. Der manuelle Provider
-/// ist kürzer, lesbarer und spart einen build_runner-Durchlauf.
 final feedEntriesProvider = StreamProvider<List<Entry>>((ref) {
   return ref.watch(entryRepositoryProvider).watchAllEntries();
 }, name: 'feedEntriesProvider');
+
+// ── Suche ─────────────────────────────────────────────────────────────────
+
+/// Hält den aktuellen Suchbegriff des Nutzers.
+final searchQueryProvider = StateProvider.autoDispose<String>(
+  (ref) => '',
+  name: 'searchQueryProvider',
+);
+
+/// Liefert Suchergebnisse via FTS5 für den aktuellen Suchbegriff.
+///
+/// WARUM FutureProvider statt StreamProvider?
+/// FTS5-Suche ist eine einmalige Abfrage (kein reaktiver Stream).
+/// FutureProvider.family wird durch Riverpod automatisch neu ausgeführt,
+/// sobald sich [query] ändert – das gibt uns Reaktivität ohne Stream.
+final searchResultsProvider = FutureProvider.autoDispose
+    .family<List<Entry>, String>((ref, query) {
+  return ref.read(entryRepositoryProvider).searchEntries(query);
+}, name: 'searchResultsProvider');

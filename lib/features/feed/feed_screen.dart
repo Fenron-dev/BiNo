@@ -2,24 +2,21 @@
 //
 // ZWECK: Hauptansicht der App. Zeigt alle Einträge als chronologische Liste,
 //        neueste Einträge unten (WhatsApp-Stil). Scrollt automatisch bei neuen Einträgen.
-// ABHÄNGIGKEITEN: feedEntriesProvider, EntryCard.
-// PHASE: 1 – Grundgerüst. Phase 2+ fügt Pull-to-Refresh, On-this-day-Karten,
-//        Filter-Chips und Suchfeld hinzu.
+//        Phase 3: Volltext-Suche via FTS5, Swipe-to-Delete.
+// ABHÄNGIGKEITEN: feedEntriesProvider, searchResultsProvider, EntryCard.
+// PHASE: 1 – Grundgerüst. Phase 3: Suche + Löschen.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/constants.dart';
+import '../../core/di.dart';
+import '../../data/db/database.dart' hide Container;
 import 'feed_provider.dart';
 import 'entry_card.dart';
 
 /// Feed-Screen: chronologische Liste aller Einträge.
-///
-/// WARUM ConsumerStatefulWidget statt ConsumerWidget?
-/// Wir benötigen einen ScrollController für Auto-Scroll und müssen den
-/// vorherigen Eintragsstand (_previousEntryCount) zwischen Builds speichern.
-/// StatefulWidget ist dafür die korrekte Wahl.
 class FeedScreen extends ConsumerStatefulWidget {
   const FeedScreen({super.key});
 
@@ -29,25 +26,29 @@ class FeedScreen extends ConsumerStatefulWidget {
 
 class _FeedScreenState extends ConsumerState<FeedScreen> {
   final ScrollController _scrollController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
   int _previousEntryCount = 0;
+  bool _isSearching = false;
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
-  /// Scrollt zur untersten Position der Liste.
-  ///
-  /// WARUM Position 0 bei reverse:true?
-  /// ListView(reverse: true) invertiert die Scroll-Achse: Position 0 ist das
-  /// untere Ende der Liste (wo der neueste Eintrag erscheint).
-  ///
-  /// [animate] = false beim ersten Laden (kein sichtbares Ruckeln),
-  /// true bei neuen Einträgen (sanfte Animation).
+  void _openSearch() {
+    setState(() => _isSearching = true);
+  }
+
+  void _closeSearch() {
+    setState(() => _isSearching = false);
+    _searchController.clear();
+    ref.read(searchQueryProvider.notifier).state = '';
+  }
+
   void _scrollToBottom({bool animate = true}) {
     if (!_scrollController.hasClients) return;
-
     if (animate) {
       _scrollController.animateTo(
         0,
@@ -61,75 +62,214 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final entriesAsync = ref.watch(feedEntriesProvider);
+    final searchQuery = ref.watch(searchQueryProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Feed'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Einstellungen',
-            onPressed: () => context.push(AppRoutes.settings),
-          ),
-        ],
+        // Im Such-Modus: TextField statt Titel.
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: 'Suchen…',
+                  border: InputBorder.none,
+                ),
+                onChanged: (q) =>
+                    ref.read(searchQueryProvider.notifier).state = q,
+              )
+            : const Text('Feed'),
+        actions: _isSearching
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Suche schließen',
+                  onPressed: _closeSearch,
+                ),
+              ]
+            : [
+                IconButton(
+                  icon: const Icon(Icons.search),
+                  tooltip: 'Suchen',
+                  onPressed: _openSearch,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.settings_outlined),
+                  tooltip: 'Einstellungen',
+                  onPressed: () => context.push(AppRoutes.settings),
+                ),
+              ],
       ),
-      body: entriesAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => _ErrorView(
-          error: error,
-          onRetry: () => ref.invalidate(feedEntriesProvider),
-        ),
-        data: (entries) {
-          // Auto-Scroll zum neuesten Eintrag wenn die Anzahl zunimmt.
-          // WidgetsBinding.addPostFrameCallback: stellt sicher dass die
-          // Liste bereits gerendert ist, bevor der Scroll-Befehl ausgeführt wird.
-          if (entries.length > _previousEntryCount && _previousEntryCount > 0) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _scrollToBottom();
-            });
-          }
-          // Beim ersten Laden direkt ohne Animation ans Ende springen.
-          if (_previousEntryCount == 0 && entries.isNotEmpty) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _scrollToBottom(animate: false);
-            });
-          }
-          _previousEntryCount = entries.length;
-
-          if (entries.isEmpty) {
-            return const _EmptyFeedPlaceholder();
-          }
-
-          return ListView.builder(
-            controller: _scrollController,
-            // reverse:true: Index 0 erscheint unten im Viewport.
-            // Da Drift die Einträge aufsteigend (älteste zuerst) liefert,
-            // erscheint der neueste Eintrag (letzter Index) ganz unten –
-            // genau wie im WhatsApp-Chat.
-            reverse: true,
-            padding: const EdgeInsets.only(
-              top: 8,
-              // Abstand über der BottomAppBar, damit der unterste Eintrag
-              // nicht hinter der Navigation verborgen liegt.
-              bottom: 88,
+      body: _isSearching
+          ? _SearchResultsView(query: searchQuery)
+          : _FeedView(
+              scrollController: _scrollController,
+              previousEntryCount: _previousEntryCount,
+              onCountUpdate: (count) => _previousEntryCount = count,
+              onScrollToBottom: _scrollToBottom,
             ),
-            itemCount: entries.length,
-            itemBuilder: (context, index) {
-              // reverse:true dreht die Indizes um: Index 0 = letzter Eintrag
-              // der Liste (neuester). So zeigen wir ohne extra Sortierung
-              // den neuesten Eintrag unten.
-              final entry = entries[entries.length - 1 - index];
-              return EntryCard(entry: entry, key: ValueKey(entry.id));
-            },
-          );
-        },
-      ),
     );
   }
 }
 
-/// Platzhalterverview für einen leeren Feed.
+// ── Such-Ergebnisse ───────────────────────────────────────────────────────────
+
+class _SearchResultsView extends ConsumerWidget {
+  final String query;
+
+  const _SearchResultsView({required this.query});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (query.trim().isEmpty) {
+      return const Center(
+        child: Text('Suchbegriff eingeben…'),
+      );
+    }
+
+    final resultsAsync = ref.watch(searchResultsProvider(query));
+
+    return resultsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (_, __) =>
+          const Center(child: Text('Fehler bei der Suche.')),
+      data: (entries) {
+        if (entries.isEmpty) {
+          return Center(
+            child: Text('Keine Ergebnisse für „$query"'),
+          );
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: entries.length,
+          itemBuilder: (context, index) =>
+              EntryCard(entry: entries[index], key: ValueKey(entries[index].id)),
+        );
+      },
+    );
+  }
+}
+
+// ── Normaler Feed ─────────────────────────────────────────────────────────────
+
+class _FeedView extends ConsumerStatefulWidget {
+  final ScrollController scrollController;
+  final int previousEntryCount;
+  final void Function(int count) onCountUpdate;
+  final void Function({bool animate}) onScrollToBottom;
+
+  const _FeedView({
+    required this.scrollController,
+    required this.previousEntryCount,
+    required this.onCountUpdate,
+    required this.onScrollToBottom,
+  });
+
+  @override
+  ConsumerState<_FeedView> createState() => _FeedViewState();
+}
+
+class _FeedViewState extends ConsumerState<_FeedView> {
+  @override
+  Widget build(BuildContext context) {
+    final entriesAsync = ref.watch(feedEntriesProvider);
+
+    return entriesAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, stack) => _ErrorView(
+        error: error,
+        onRetry: () => ref.invalidate(feedEntriesProvider),
+      ),
+      data: (entries) {
+        if (entries.length > widget.previousEntryCount &&
+            widget.previousEntryCount > 0) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            widget.onScrollToBottom();
+          });
+        }
+        if (widget.previousEntryCount == 0 && entries.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            widget.onScrollToBottom(animate: false);
+          });
+        }
+        widget.onCountUpdate(entries.length);
+
+        if (entries.isEmpty) return const _EmptyFeedPlaceholder();
+
+        return ListView.builder(
+          controller: widget.scrollController,
+          reverse: true,
+          padding: const EdgeInsets.only(top: 8, bottom: 88),
+          itemCount: entries.length,
+          itemBuilder: (context, index) {
+            final entry = entries[entries.length - 1 - index];
+            return _SwipableEntryCard(
+              key: ValueKey(entry.id),
+              entry: entry,
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+/// EntryCard mit Swipe-to-Delete (Wischen nach links).
+class _SwipableEntryCard extends ConsumerWidget {
+  final Entry entry;
+
+  const _SwipableEntryCard({super.key, required this.entry});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Dismissible(
+      key: ValueKey('dismissible_${entry.id}'),
+      direction: DismissDirection.endToStart,
+      // Roter Hintergrund mit Papierkorb-Icon beim Wischen.
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        color: Theme.of(context).colorScheme.errorContainer,
+        child: Icon(
+          Icons.delete_outline,
+          color: Theme.of(context).colorScheme.onErrorContainer,
+        ),
+      ),
+      // Bestätigung vor dem endgültigen Löschen.
+      confirmDismiss: (direction) async {
+        return await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Eintrag löschen?'),
+            content: const Text(
+              'Dieser Eintrag und alle zugehörigen Anhänge werden dauerhaft gelöscht.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Abbrechen'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                ),
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Löschen'),
+              ),
+            ],
+          ),
+        );
+      },
+      onDismissed: (_) {
+        ref.read(entryRepositoryProvider).deleteEntry(entry.id);
+      },
+      child: EntryCard(entry: entry),
+    );
+  }
+}
+
+// ── Platzhalter & Fehlerview ──────────────────────────────────────────────────
+
 class _EmptyFeedPlaceholder extends StatelessWidget {
   const _EmptyFeedPlaceholder();
 
@@ -159,7 +299,6 @@ class _EmptyFeedPlaceholder extends StatelessWidget {
   }
 }
 
-/// Fehlerview mit Retry-Option.
 class _ErrorView extends StatelessWidget {
   final Object error;
   final VoidCallback onRetry;

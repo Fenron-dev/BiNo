@@ -13,6 +13,9 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
+import 'package:go_router/go_router.dart';
+
+import '../../core/constants.dart';
 import '../../core/di.dart';
 // 'Container' aus database.dart ausblenden – kollidiert mit Flutter's Container-Widget.
 import '../../data/db/database.dart' hide Container;
@@ -36,7 +39,7 @@ class EntryCard extends ConsumerWidget {
     return Card(
       color: colorScheme.surfaceContainerLow,
       child: InkWell(
-        onTap: () {},
+        onTap: () => context.push(AppRoutes.entryDetail(entry.id)),
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(12),

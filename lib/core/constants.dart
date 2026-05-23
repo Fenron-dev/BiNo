@@ -35,7 +35,7 @@ abstract class AppRoutes {
 
   static const String settings = '/settings';
 
-  // Phase 3+:
-  // static const String entryDetail = '/entry/:id';
-  // static const String search = '/search';
+  // Eintrag-Detail: Subroute innerhalb des Feed-Branches.
+  // Vollpfad: /feed/detail/:id
+  static String entryDetail(String id) => '/feed/detail/$id';
 }

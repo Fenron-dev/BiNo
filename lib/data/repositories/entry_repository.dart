@@ -14,6 +14,7 @@ import '../db/database.dart';
 import '../db/daos/entry_dao.dart';
 import '../db/daos/tag_dao.dart';
 import '../db/tables/entries.dart';
+import '../repositories/attachment_repository.dart';
 import '../../domain/tag_parser.dart';
 
 /// Repository für Einträge.
@@ -27,15 +28,21 @@ import '../../domain/tag_parser.dart';
 class EntryRepository {
   final EntryDao _entryDao;
   final TagDao _tagDao;
+  final AttachmentRepository _attachmentRepo;
   final Uuid _uuid;
 
   EntryRepository({
     required EntryDao entryDao,
     required TagDao tagDao,
+    required AttachmentRepository attachmentRepo,
     Uuid? uuid,
   })  : _entryDao = entryDao,
         _tagDao = tagDao,
+        _attachmentRepo = attachmentRepo,
         _uuid = uuid ?? const Uuid();
+
+  /// Gibt einen einzelnen Eintrag zurück, oder null wenn nicht gefunden.
+  Future<Entry?> getEntryById(String id) => _entryDao.getEntryById(id);
 
   /// Beobachtet alle Einträge als reaktiven Stream.
   ///
@@ -88,6 +95,23 @@ class EntryRepository {
 
     return id;
   }
+
+  /// Löscht einen Eintrag mit allen Anhängen (Dateisystem + DB) und Tag-Links.
+  Future<void> deleteEntry(String id) async {
+    // Anhang-Dateien + DB-Records zuerst bereinigen (Pfade noch vorhanden).
+    await _attachmentRepo.deleteAllForEntry(id);
+    await _entryDao.attachedDatabase.transaction(() async {
+      await _tagDao.unlinkAllTagsFromEntry(id);
+      await _entryDao.deleteEntry(id);
+    });
+  }
+
+  /// Schaltet den Pinned-Status eines Eintrags um.
+  Future<void> togglePin(String id) => _entryDao.togglePin(id);
+
+  /// Durchsucht Einträge via FTS5-Volltext-Index.
+  Future<List<Entry>> searchEntries(String query) =>
+      _entryDao.searchEntries(query);
 
   /// Parst Tags aus [body] und synchronisiert die entry_tags-Verknüpfungen.
   ///

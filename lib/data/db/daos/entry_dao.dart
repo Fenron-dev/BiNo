@@ -69,7 +69,61 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
       (delete(entries)..where((t) => t.id.equals(id))).go();
 
   /// Gibt den Eintrag mit der gegebenen UUID zurück, oder null wenn nicht gefunden.
-  /// Wird im Repository für Duplikat-Erkennung (Phase 3) und Update-Prüfungen genutzt.
   Future<Entry?> getEntryById(String id) =>
       (select(entries)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  /// Durchsucht Einträge via FTS5-Index (Volltext-Suche).
+  ///
+  /// WARUM zweistufig (FTS5 → ID-Liste → SELECT)?
+  /// Drift 2.x kennt entries_fts nicht als verwaltete Tabelle. customSelect
+  /// mit JOIN liefert QueryRow-Objekte, die sich nicht direkt zu Entry
+  /// mappen lassen. Der Umweg über UUIDs ermöglicht typsichere Drift-Queries.
+  ///
+  /// Prefix-Suche: 'hallo' matcht 'hallo', 'hallosagen', 'hallwelt' usw.
+  Future<List<Entry>> searchEntries(String query) async {
+    if (query.trim().isEmpty) return [];
+
+    // Multi-Wort-Prefix-Suche: jedes Wort wird einzeln mit * versehen.
+    final terms = query
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((t) => t.isNotEmpty)
+        .map((t) => '"${t.replaceAll('"', '""')}*"')
+        .join(' ');
+
+    try {
+      final ids = await customSelect(
+        'SELECT e.id FROM entries e '
+        'JOIN entries_fts ON entries_fts.rowid = e.rowid '
+        'WHERE entries_fts MATCH ?',
+        variables: [Variable.withString(terms)],
+        readsFrom: {entries},
+      ).map((row) => row.read<String>('id')).get();
+
+      if (ids.isEmpty) return [];
+
+      return (select(entries)
+            ..where((t) => t.id.isIn(ids))
+            ..orderBy([
+              (t) => OrderingTerm(expression: t.pinned, mode: OrderingMode.desc),
+              (t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc),
+            ]))
+          .get();
+    } catch (_) {
+      // Syntaktisch ungültige FTS5-Queries (z.B. einzelnes "(") → leere Liste.
+      return [];
+    }
+  }
+
+  /// Schaltet den Pinned-Status eines Eintrags um.
+  Future<void> togglePin(String id) async {
+    final entry = await getEntryById(id);
+    if (entry == null) return;
+    await (update(entries)..where((t) => t.id.equals(id))).write(
+      EntriesCompanion(
+        pinned: Value(!entry.pinned),
+        updatedAt: Value(DateTime.now().toUtc()),
+      ),
+    );
+  }
 }

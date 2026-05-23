@@ -97,6 +97,7 @@ final entryRepositoryProvider = Provider<EntryRepository>((ref) {
   return EntryRepository(
     entryDao: ref.watch(entryDaoProvider),
     tagDao: ref.watch(tagDaoProvider),
+    attachmentRepo: ref.watch(attachmentRepositoryProvider),
   );
 }, name: 'entryRepositoryProvider');
 
