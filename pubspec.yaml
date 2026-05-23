@@ -70,6 +70,7 @@ dependencies:
   file_picker: ^8.3.7
   share_plus: ^10.0.2
   permission_handler: ^11.3.1
+  metadata_god: ^1.1.0
 
 dev_dependencies:
   flutter_test:

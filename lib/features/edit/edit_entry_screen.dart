@@ -593,26 +593,18 @@ class _PropertyField extends ConsumerWidget {
           }).toList(),
         );
 
-      // ── Tags (kommagetrennt) ──────────────────────────────────────────────
+      // ── Tags (Chip-Input) ─────────────────────────────────────────────────
       case PropertyFieldType.tags:
-        String initial = '';
+        List<String> initialTags = [];
         try {
           if (currentValue != null) {
-            final list = List<String>.from(jsonDecode(currentValue));
-            initial = list.join(', ');
+            initialTags = List<String>.from(jsonDecode(currentValue));
           }
         } catch (_) {}
-        return _FocusBlurTextField(
-          initialValue: initial,
-          hint: 'Tag1, Tag2, Tag3...',
-          onCommit: (v) {
-            final tags = v
-                .split(',')
-                .map((t) => t.trim())
-                .where((t) => t.isNotEmpty)
-                .toList();
-            _setValue(ref, tags.isEmpty ? null : jsonEncode(tags));
-          },
+        return _TagChipInput(
+          initialTags: initialTags,
+          onChanged: (tags) =>
+              _setValue(ref, tags.isEmpty ? null : jsonEncode(tags)),
         );
 
       // ── Zahl ───────────────────────────────────────────────────────────────
@@ -657,6 +649,125 @@ class _PropertyField extends ConsumerWidget {
       }
     } catch (_) {}
     return [];
+  }
+}
+
+// ── Textfeld mit Speichern bei Fokusverlust ───────────────────────────────────
+
+// ── Tags-Chip-Input ───────────────────────────────────────────────────────────
+
+/// Chip-basiertes Tag-Eingabefeld.
+///
+/// Tags werden einzeln als Chips dargestellt. Komma oder Enter im Textfeld
+/// trennt den aktuellen Text als neuen Chip ab. Chips können über das ×
+/// wieder entfernt werden.
+class _TagChipInput extends StatefulWidget {
+  final List<String> initialTags;
+  final ValueChanged<List<String>> onChanged;
+
+  const _TagChipInput({required this.initialTags, required this.onChanged});
+
+  @override
+  State<_TagChipInput> createState() => _TagChipInputState();
+}
+
+class _TagChipInputState extends State<_TagChipInput> {
+  late List<String> _tags;
+  final _ctrl = TextEditingController();
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _tags = List.from(widget.initialTags);
+  }
+
+  @override
+  void didUpdateWidget(_TagChipInput old) {
+    super.didUpdateWidget(old);
+    // Externe Updates (Stream) nur wenn kein aktiver Tastatureingabe-Fokus.
+    if (!_focus.hasFocus && old.initialTags.join('\x00') != widget.initialTags.join('\x00')) {
+      setState(() => _tags = List.from(widget.initialTags));
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _addTag(String raw) {
+    final tag = raw.trim();
+    if (tag.isEmpty || _tags.contains(tag)) {
+      _ctrl.clear();
+      return;
+    }
+    setState(() => _tags.add(tag));
+    _ctrl.clear();
+    widget.onChanged(List.from(_tags));
+  }
+
+  void _removeTag(String tag) {
+    setState(() => _tags.remove(tag));
+    widget.onChanged(List.from(_tags));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        // Vorhandene Tags als löschbare Chips
+        ..._tags.map(
+          (tag) => InputChip(
+            label: Text(tag),
+            onDeleted: () => _removeTag(tag),
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+          ),
+        ),
+        // Eingabefeld für neuen Tag
+        SizedBox(
+          width: 140,
+          child: TextField(
+            controller: _ctrl,
+            focusNode: _focus,
+            decoration: InputDecoration(
+              hintText: _tags.isEmpty ? 'Tag hinzufügen...' : '+ Tag',
+              hintStyle: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              isDense: true,
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 6),
+            ),
+            style: theme.textTheme.bodyMedium,
+            textCapitalization: TextCapitalization.none,
+            // Komma im Text → sofort trennen
+            onChanged: (text) {
+              if (text.contains(',')) {
+                final parts = text.split(',');
+                for (final part in parts.sublist(0, parts.length - 1)) {
+                  _addTag(part);
+                }
+                // Letztes Segment bleibt im Feld (kann leer sein)
+                _ctrl.value = TextEditingValue(
+                  text: parts.last,
+                  selection: TextSelection.collapsed(offset: parts.last.length),
+                );
+              }
+            },
+            onSubmitted: _addTag,
+          ),
+        ),
+      ],
+    );
   }
 }
 

@@ -100,6 +100,49 @@ class AttachmentRepository {
     return id;
   }
 
+  /// Speichert eine Videodatei als Anhang zu [entryId].
+  Future<String> saveVideo({
+    required String entryId,
+    required File videoFile,
+    String mimeType = 'video/mp4',
+    int? durationMs,
+  }) async {
+    final fileInfo =
+        await _fileService.saveFile(videoFile, mimeType: mimeType);
+    final id = _uuid.v4();
+    await _dao.insertAttachment(
+      AttachmentsCompanion.insert(
+        id: id,
+        entryId: entryId,
+        filePath: fileInfo.relativePath,
+        mimeType: fileInfo.mimeType,
+        size: fileInfo.size,
+        durationMs: Value(durationMs),
+      ),
+    );
+    return id;
+  }
+
+  /// Speichert eine beliebige Datei als Anhang zu [entryId] (PDF, Dokumente…).
+  Future<String> saveGenericFile({
+    required String entryId,
+    required File file,
+    required String mimeType,
+  }) async {
+    final fileInfo = await _fileService.saveFile(file, mimeType: mimeType);
+    final id = _uuid.v4();
+    await _dao.insertAttachment(
+      AttachmentsCompanion.insert(
+        id: id,
+        entryId: entryId,
+        filePath: fileInfo.relativePath,
+        mimeType: fileInfo.mimeType,
+        size: fileInfo.size,
+      ),
+    );
+    return id;
+  }
+
   /// Gibt alle Anhänge eines Eintrags zurück.
   Future<List<Attachment>> getForEntry(String entryId) =>
       _dao.getAttachmentsForEntry(entryId);

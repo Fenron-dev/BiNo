@@ -10,7 +10,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:metadata_god/metadata_god.dart';
 import 'package:mime/mime.dart';
+import 'package:path/path.dart' as p;
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 import '../../core/di.dart';
@@ -82,6 +84,7 @@ class _ShareIntentHandlerState extends ConsumerState<ShareIntentHandler> {
 
           case SharedMediaType.image:
             final imageEntryId = await entryRepo.createEntry(
+              title: _filenameWithout(file.path),
               body: '',
               type: EntryType.image,
               sourceApp: 'share_intent',
@@ -91,14 +94,41 @@ class _ShareIntentHandlerState extends ConsumerState<ShareIntentHandler> {
               imageFile: File(file.path),
             );
 
+          case SharedMediaType.video:
+            final videoEntryId = await entryRepo.createEntry(
+              title: _filenameWithout(file.path),
+              body: '',
+              type: EntryType.video,
+              sourceApp: 'share_intent',
+            );
+            final videoMime =
+                file.mimeType ?? lookupMimeType(file.path) ?? 'video/mp4';
+            await attachmentRepo.saveVideo(
+              entryId: videoEntryId,
+              videoFile: File(file.path),
+              mimeType: videoMime,
+              durationMs: file.duration,
+            );
+
           case SharedMediaType.file:
             // receive_sharing_intent liefert Audio-Dateien als SharedMediaType.file.
             // MIME-Typ: zuerst vom Paket (file.mimeType), dann aus der Dateiendung.
             final detectedMime =
                 file.mimeType ?? lookupMimeType(file.path) ?? '';
+
             if (detectedMime.startsWith('audio/')) {
+              // Audio-Metadaten auslesen (ID3, FLAC-Tags, …)
+              final meta = await _readAudioMeta(file.path);
+              final title = (meta?.title?.isNotEmpty == true)
+                  ? meta!.title!
+                  : _filenameWithout(file.path);
+              final body = _formatAudioMeta(meta);
+              final durationMs =
+                  meta?.duration?.inMilliseconds ?? file.duration;
+
               final audioEntryId = await entryRepo.createEntry(
-                body: '',
+                title: title,
+                body: body,
                 type: EntryType.audio,
                 sourceApp: 'share_intent',
               );
@@ -106,10 +136,11 @@ class _ShareIntentHandlerState extends ConsumerState<ShareIntentHandler> {
                 entryId: audioEntryId,
                 audioFile: File(file.path),
                 mimeType: detectedMime,
-                durationMs: file.duration,
+                durationMs: durationMs,
               );
             } else if (detectedMime.startsWith('image/')) {
               final fileImageId = await entryRepo.createEntry(
+                title: _filenameWithout(file.path),
                 body: '',
                 type: EntryType.image,
                 sourceApp: 'share_intent',
@@ -119,12 +150,29 @@ class _ShareIntentHandlerState extends ConsumerState<ShareIntentHandler> {
                 imageFile: File(file.path),
                 mimeType: detectedMime,
               );
+            } else if (detectedMime.startsWith('video/')) {
+              final fileVideoId = await entryRepo.createEntry(
+                title: _filenameWithout(file.path),
+                body: '',
+                type: EntryType.video,
+                sourceApp: 'share_intent',
+              );
+              await attachmentRepo.saveVideo(
+                entryId: fileVideoId,
+                videoFile: File(file.path),
+                mimeType: detectedMime,
+                durationMs: file.duration,
+              );
+            } else {
+              // PDF, Dokumente usw. – speichern ohne spezifische Verarbeitung
+              await entryRepo.createEntry(
+                title: _filenameWithout(file.path),
+                body: '',
+                type: EntryType.mixed,
+                sourceApp: 'share_intent',
+              );
             }
-            // Andere Dateitypen (Video, PDF, …) werden in späteren Phasen unterstützt.
 
-          default:
-            // Video und unbekannte Typen werden in späteren Phasen unterstützt.
-            break;
         }
       } catch (e) {
         // Fehler beim Verarbeiten eines einzelnen Intents sollen die anderen
@@ -139,6 +187,47 @@ class _ShareIntentHandlerState extends ConsumerState<ShareIntentHandler> {
     // Kein SnackBar hier: ShareIntentHandler sitzt oberhalb von MaterialApp
     // und hat daher keinen ScaffoldMessenger-Vorfahren. Die gespeicherten
     // Einträge erscheinen automatisch im Feed.
+  }
+
+  /// Dateiname ohne Erweiterung als Titelvorschlag.
+  String _filenameWithout(String path) {
+    final name = p.basenameWithoutExtension(path);
+    // URL-kodierte Zeichen dekodieren (z. B. %20 → Leerzeichen)
+    try {
+      return Uri.decodeComponent(name);
+    } catch (_) {
+      return name;
+    }
+  }
+
+  /// Liest Audio-Metadaten via metadata_god (ID3, FLAC-Tags, …).
+  ///
+  /// Gibt null zurück wenn die Datei kein unterstütztes Format hat oder
+  /// das Lesen fehlschlägt – der Aufrufer fällt dann auf den Dateinamen zurück.
+  Future<Metadata?> _readAudioMeta(String path) async {
+    try {
+      return await MetadataGod.readMetadata(file: path);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Formatiert Audio-Metadaten als lesbaren Body-Text.
+  ///
+  /// Gibt einen leeren String zurück, wenn keine relevanten Felder vorhanden sind.
+  String _formatAudioMeta(Metadata? meta) {
+    if (meta == null) return '';
+    final lines = <String>[];
+    if (meta.artist?.isNotEmpty == true) lines.add('Interpret: ${meta.artist}');
+    if (meta.album?.isNotEmpty == true) {
+      final albumLine = meta.year != null
+          ? 'Album: ${meta.album} (${meta.year})'
+          : 'Album: ${meta.album}';
+      lines.add(albumLine);
+    }
+    if (meta.genre?.isNotEmpty == true) lines.add('Genre: ${meta.genre}');
+    if (meta.trackNumber != null) lines.add('Track: ${meta.trackNumber}');
+    return lines.join('\n');
   }
 
   @override

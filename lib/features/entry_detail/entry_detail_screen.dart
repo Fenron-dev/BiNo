@@ -6,6 +6,7 @@
 //                 path_provider, path.
 // PHASE: 3 – Detail-Ansicht, Audio-Wiedergabe, Pin/Unpin, Löschen.
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -13,12 +14,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+
+import 'dart:convert';
 
 import '../../core/di.dart';
 // 'Container' aus database.dart ausblenden – kollidiert mit Flutter's Container-Widget.
 import '../../data/db/database.dart' hide Container;
+import '../../data/db/tables/property_definitions.dart';
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 
@@ -37,6 +42,18 @@ final _entryProvider = StreamProvider.autoDispose
 final _attachmentsProvider = StreamProvider.autoDispose
     .family<List<Attachment>, String>((ref, entryId) {
   return ref.watch(attachmentRepositoryProvider).watchForEntry(entryId);
+});
+
+/// Beobachtet gesetzte Property-Werte für einen Eintrag.
+final _detailPropertiesProvider = StreamProvider.autoDispose
+    .family<List<EntryProperty>, String>((ref, entryId) {
+  return ref.watch(propertyDaoProvider).watchPropertiesForEntry(entryId);
+});
+
+/// Beobachtet Property-Definitionen für einen Workspace.
+final _detailDefinitionsProvider = StreamProvider.autoDispose
+    .family<List<PropertyDefinition>, String>((ref, workspaceId) {
+  return ref.watch(propertyDaoProvider).watchDefinitionsForWorkspace(workspaceId);
 });
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -148,6 +165,9 @@ class _EntryView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final attachmentsAsync = ref.watch(_attachmentsProvider(entry.id));
+    final workspaceId = ref.watch(activeWorkspaceProvider);
+    final propsAsync = ref.watch(_detailPropertiesProvider(entry.id));
+    final defsAsync = ref.watch(_detailDefinitionsProvider(workspaceId));
 
     return Scaffold(
       appBar: AppBar(
@@ -212,6 +232,72 @@ class _EntryView extends ConsumerWidget {
             ),
           ),
 
+          // Notizen (falls vorhanden)
+          if (entry.notes != null && entry.notes!.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.edit_note,
+                    size: 16, color: theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 4),
+                Text(
+                  'Anmerkungen',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            SelectableText(
+              entry.notes!,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+
+          // Properties (nur wenn mindestens ein Wert gesetzt ist)
+          propsAsync.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (props) {
+              if (props.isEmpty) return const SizedBox.shrink();
+              return defsAsync.when(
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+                data: (defs) {
+                  // Nur Definitionen anzeigen, für die ein Wert gesetzt ist
+                  final setProps = props
+                      .map((p) {
+                        final def = defs.where((d) => d.id == p.propertyId).firstOrNull;
+                        return def != null ? (def, p) : null;
+                      })
+                      .whereType<(PropertyDefinition, EntryProperty)>()
+                      .toList();
+                  if (setProps.isEmpty) return const SizedBox.shrink();
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 16),
+                      const Divider(),
+                      const SizedBox(height: 8),
+                      ...setProps.map(
+                        (pair) => _PropertyRow(
+                          definition: pair.$1,
+                          property: pair.$2,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
+
           // URL-Quelle
           if (entry.sourceUrl != null) ...[
             const SizedBox(height: 16),
@@ -230,6 +316,126 @@ class _EntryView extends ConsumerWidget {
   }
 }
 
+// ── Property-Zeile (read-only) ────────────────────────────────────────────────
+
+class _PropertyRow extends StatelessWidget {
+  final PropertyDefinition definition;
+  final EntryProperty property;
+
+  const _PropertyRow({required this.definition, required this.property});
+
+  PropertyFieldType get _type {
+    try {
+      return PropertyFieldType.values.byName(definition.fieldType);
+    } catch (_) {
+      return PropertyFieldType.text;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              definition.name,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: _buildValue(theme)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildValue(ThemeData theme) {
+    final raw = property.value;
+    if (raw == null) return const SizedBox.shrink();
+
+    switch (_type) {
+      case PropertyFieldType.boolean:
+        final val = raw == 'true';
+        return Icon(
+          val ? Icons.check_circle_outline : Icons.cancel_outlined,
+          size: 20,
+          color: val ? theme.colorScheme.primary : theme.colorScheme.outlineVariant,
+        );
+
+      case PropertyFieldType.rating:
+        final stars = int.tryParse(raw) ?? 0;
+        return Row(
+          children: List.generate(
+            5,
+            (i) => Icon(
+              i < stars ? Icons.star_rounded : Icons.star_outline_rounded,
+              size: 20,
+              color: i < stars
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.outlineVariant,
+            ),
+          ),
+        );
+
+      case PropertyFieldType.tags:
+        List<String> tags = [];
+        try {
+          tags = List<String>.from(jsonDecode(raw));
+        } catch (_) {}
+        return Wrap(
+          spacing: 4,
+          runSpacing: 4,
+          children: tags
+              .map((t) => Chip(
+                    label: Text(t),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                  ))
+              .toList(),
+        );
+
+      case PropertyFieldType.multiselect:
+        List<String> values = [];
+        try {
+          values = List<String>.from(jsonDecode(raw));
+        } catch (_) {}
+        return Wrap(
+          spacing: 4,
+          runSpacing: 4,
+          children: values
+              .map((v) => Chip(
+                    label: Text(v),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                  ))
+              .toList(),
+        );
+
+      default:
+        // text, number, date, url, link, select → einfach dekodieren
+        String display = raw;
+        try {
+          final decoded = jsonDecode(raw);
+          if (decoded is String) display = decoded;
+          if (decoded is num) display = decoded.toString();
+        } catch (_) {}
+        return SelectableText(
+          display,
+          style: theme.textTheme.bodyMedium,
+        );
+    }
+  }
+}
+
 // ── Anhänge-Bereich ───────────────────────────────────────────────────────────
 
 class _AttachmentSection extends StatelessWidget {
@@ -245,10 +451,16 @@ class _AttachmentSection extends StatelessWidget {
         attachments.where((a) => a.mimeType.startsWith('image/')).toList();
     final audios =
         attachments.where((a) => a.mimeType.startsWith('audio/')).toList();
+    final videos =
+        attachments.where((a) => a.mimeType.startsWith('video/')).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        for (final video in videos) ...[
+          const SizedBox(height: 12),
+          _VideoPlayerWidget(attachment: video),
+        ],
         if (images.isNotEmpty) ...[
           const SizedBox(height: 16),
           _ImageGallery(images: images),
@@ -326,6 +538,74 @@ class _ImageGallery extends StatelessWidget {
   }
 }
 
+// ── Video-Player ──────────────────────────────────────────────────────────────
+
+/// Eingebetteter Video-Player mit Play/Pause-Overlay (media_kit_video-basiert).
+class _VideoPlayerWidget extends StatefulWidget {
+  final Attachment attachment;
+
+  const _VideoPlayerWidget({required this.attachment});
+
+  @override
+  State<_VideoPlayerWidget> createState() => _VideoPlayerWidgetState();
+}
+
+class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
+  late final Player _player;
+  late final VideoController _controller;
+  bool _isLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _player = Player();
+    _controller = VideoController(_player);
+    _loadVideo();
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadVideo() async {
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      final path =
+          p.join(appDir.path, 'attachments', widget.attachment.filePath);
+      await _player.open(Media(Uri.file(path).toString()), play: false);
+      if (mounted) setState(() => _isLoaded = true);
+    } catch (_) {
+      // Datei nicht lesbar – Player bleibt deaktiviert.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Video(
+              controller: _controller,
+              controls: AdaptiveVideoControls,
+            ),
+            if (!_isLoaded)
+              Container(
+                color: Colors.black54,
+                child: const CircularProgressIndicator(color: Colors.white),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ── Audio-Player ──────────────────────────────────────────────────────────────
 
 /// Play/Pause-Player für einen Audio-Anhang (media_kit-basiert).
@@ -347,17 +627,43 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
   late final Player _player;
   bool _isLoaded = false;
 
+  /// Vom Player-Stream gemeldete Gesamtdauer (asynchron nach Datei-Parse).
+  Duration _streamDuration = Duration.zero;
+  StreamSubscription<Duration>? _durationSub;
+
   @override
   void initState() {
     super.initState();
     _player = Player();
+    // stream.duration feuert sobald der Player die Datei-Header geparst hat.
+    _durationSub = _player.stream.duration.listen((d) {
+      if (mounted && d.inMilliseconds > 0) {
+        setState(() => _streamDuration = d);
+      }
+    });
     _loadAudio();
   }
 
   @override
   void dispose() {
+    _durationSub?.cancel();
     _player.dispose();
     super.dispose();
+  }
+
+  /// Gibt die zuverlässigste Gesamtdauer zurück.
+  ///
+  /// WARUM diese Priorität?
+  /// Selbst aufgenommene AAC/M4A-Dateien (via `record`-Paket) haben manchmal
+  /// fehlerhafte Dauer-Metadaten im Container-Header, die media_kit falsch
+  /// interpretiert. Der Timer-gemessene Wert aus durationMs ist korrekt.
+  Duration get _effectiveDuration {
+    if (widget.attachment.durationMs != null &&
+        widget.attachment.durationMs! > 0) {
+      return Duration(milliseconds: widget.attachment.durationMs!);
+    }
+    if (_streamDuration.inMilliseconds > 0) return _streamDuration;
+    return _player.state.duration;
   }
 
   Future<void> _loadAudio() async {
@@ -441,7 +747,7 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
               stream: _player.stream.position,
               builder: (context, posSnap) {
                 final position = posSnap.data ?? Duration.zero;
-                final duration = _player.state.duration;
+                final duration = _effectiveDuration;
                 final progress = duration.inMilliseconds > 0
                     ? (position.inMilliseconds / duration.inMilliseconds)
                         .clamp(0.0, 1.0)
@@ -458,7 +764,7 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
                       ),
                       child: Slider(
                         value: progress,
-                        onChanged: _isLoaded
+                        onChanged: _isLoaded && duration.inMilliseconds > 0
                             ? (v) => _player.seek(
                                   Duration(
                                     milliseconds:
