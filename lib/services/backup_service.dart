@@ -77,16 +77,19 @@ class BackupService {
         }
       }
 
-      // ZIP kodieren und in externem App-Verzeichnis speichern.
+      // ZIP kodieren und im Cache-Verzeichnis bereitstellen.
+      // Der Aufrufer (SettingsScreen) teilt die Datei anschließend via
+      // Android-Share-Sheet, damit der Nutzer selbst den Speicherort wählt.
       final zipBytes = ZipEncoder().encode(archive);
       if (zipBytes == null) return const BackupError('ZIP-Kodierung fehlgeschlagen.');
 
       final timestamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
       final filename = 'bino_backup_$timestamp.zip';
 
-      // Externes App-Verzeichnis ist für Dateimanager-Apps sichtbar.
-      final externalDir = await getExternalStorageDirectory() ?? appDir;
-      final backupFile = File(p.join(externalDir.path, filename));
+      // Temporäres Verzeichnis: kein separater Speicherort nötig, da die
+      // Datei direkt via share_plus an den vom Nutzer gewählten Ort übergeben wird.
+      final cacheDir = await getTemporaryDirectory();
+      final backupFile = File(p.join(cacheDir.path, filename));
       await backupFile.writeAsBytes(zipBytes);
 
       return BackupSuccess(backupFile.path);

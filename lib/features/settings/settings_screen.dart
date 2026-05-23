@@ -9,6 +9,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/di.dart';
 import '../../services/backup_service.dart';
@@ -37,58 +38,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     switch (result) {
       case BackupSuccess(:final path):
-        _showExportSuccessDialog(path);
+        // Android-Share-Sheet öffnen: Nutzer wählt selbst den Speicherort
+        // (Dateien-App, Google Drive, USB, E-Mail, WhatsApp …).
+        await Share.shareXFiles(
+          [XFile(path, mimeType: 'application/zip')],
+          subject: 'BiNo – Bit Notes Backup',
+        );
       case BackupError(:final message):
         _showErrorSnackBar(message);
     }
-  }
-
-  void _showExportSuccessDialog(String path) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Backup erstellt'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Die Backup-Datei wurde gespeichert unter:'),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: SelectableText(
-                path,
-                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Du findest die Datei im Dateimanager unter:\n'
-              'Interner Speicher → Android → data → '
-              'com.fenron.bino_bit_notes → files',
-              style: TextStyle(fontSize: 12),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: path));
-              Navigator.of(ctx).pop();
-            },
-            child: const Text('Pfad kopieren'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
   }
 
   // ── Import ────────────────────────────────────────────────────────────────
@@ -206,7 +164,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.upload_outlined),
             title: const Text('Backup exportieren'),
-            subtitle: const Text('Einträge + Anhänge als ZIP speichern'),
+            subtitle: const Text('Einträge + Anhänge als ZIP – Speicherort frei wählbar'),
             trailing: _isExporting
                 ? const SizedBox(
                     width: 20,
@@ -253,8 +211,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             child: Text(
               'Das Backup enthält alle Einträge, Tags und Anhänge (Bilder, Audio). '
-              'Es wird als ZIP-Datei im App-Verzeichnis des externen Speichers gespeichert '
-              'und ist über die Dateimanager-App zugänglich.',
+              'Beim Export öffnet sich das Android-Share-Sheet – du kannst das ZIP '
+              'direkt in Google Drive, auf USB, per E-Mail oder an einem anderen '
+              'Ort deiner Wahl speichern.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
