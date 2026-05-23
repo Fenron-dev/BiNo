@@ -26,6 +26,7 @@ import '../../core/di.dart';
 import '../../data/db/database.dart' hide Container;
 import '../../data/db/tables/property_definitions.dart';
 import '../containers/container_form_sheet.dart';
+import 'ai_enrich_sheet.dart';
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 
@@ -189,6 +190,14 @@ class _EntryView extends ConsumerWidget {
           style: theme.textTheme.titleSmall,
         ),
         actions: [
+          // KI-Anreicherung
+          IconButton(
+            icon: const Icon(Icons.auto_awesome_outlined),
+            tooltip: 'Mit KI anreichern',
+            onPressed: isActing
+                ? null
+                : () => showAiEnrichSheet(context, ref, entry),
+          ),
           // Bearbeiten
           IconButton(
             icon: const Icon(Icons.edit_outlined),

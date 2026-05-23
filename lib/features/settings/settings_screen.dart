@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/di.dart';
+import '../../services/ai_settings_service.dart';
 import '../../services/backup_service.dart';
 
 /// Einstellungen-Screen mit Backup/Restore-Funktion.
@@ -26,6 +27,49 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isExporting = false;
   bool _isImporting = false;
+
+  // ── KI-Einstellungen ──────────────────────────────────────────────────────
+  final _apiKeyCtrl = TextEditingController();
+  String _selectedModel = kAiModels.first.$1;
+  bool _obscureKey = true;
+  bool _isSavingAi = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAiSettings();
+  }
+
+  @override
+  void dispose() {
+    _apiKeyCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadAiSettings() async {
+    final service = ref.read(aiSettingsServiceProvider);
+    final key = await service.getApiKey();
+    final model = await service.getModel();
+    if (mounted) {
+      setState(() {
+        _apiKeyCtrl.text = key ?? '';
+        _selectedModel = model;
+      });
+    }
+  }
+
+  Future<void> _saveAiSettings() async {
+    setState(() => _isSavingAi = true);
+    await ref.read(aiSettingsServiceProvider).save(
+          apiKey: _apiKeyCtrl.text,
+          model: _selectedModel,
+        );
+    if (!mounted) return;
+    setState(() => _isSavingAi = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('KI-Einstellungen gespeichert')),
+    );
+  }
 
   // ── Export ────────────────────────────────────────────────────────────────
 
@@ -196,6 +240,88 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 : null,
             enabled: !_isExporting && !_isImporting,
             onTap: _importBackup,
+          ),
+
+          const Divider(),
+
+          // ── KI (AI-Anreicherung) ───────────────────────────────────────
+          _SectionHeader(title: 'KI – Anreicherung'),
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: TextField(
+              controller: _apiKeyCtrl,
+              obscureText: _obscureKey,
+              decoration: InputDecoration(
+                labelText: 'Anthropic API-Key',
+                hintText: 'sk-ant-...',
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscureKey
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                  ),
+                  onPressed: () =>
+                      setState(() => _obscureKey = !_obscureKey),
+                ),
+              ),
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: DropdownButtonFormField<String>(
+              // ignore: deprecated_member_use
+              value: _selectedModel,
+              decoration: const InputDecoration(
+                labelText: 'Modell',
+                border: OutlineInputBorder(),
+              ),
+              items: kAiModels
+                  .map(
+                    (m) => DropdownMenuItem(
+                      value: m.$1,
+                      child: Text(m.$2),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) setState(() => _selectedModel = v);
+              },
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _isSavingAi ? null : _saveAiSettings,
+                child: _isSavingAi
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text('KI-Einstellungen speichern'),
+              ),
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Text(
+              'Dein API-Key wird ausschließlich lokal auf dem Gerät gespeichert '
+              'und direkt an die Anthropic-API gesendet – kein eigener Server, '
+              'kein Tracking. Schlüssel unter console.anthropic.com erstellen.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
           ),
 
           const Divider(),

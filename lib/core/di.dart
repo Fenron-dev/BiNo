@@ -23,6 +23,8 @@ import '../data/repositories/entry_repository.dart';
 import '../data/repositories/attachment_repository.dart';
 import '../data/ml/ocr_service.dart';
 import '../data/ml/stt_service.dart';
+import '../services/ai_enrich_service.dart';
+import '../services/ai_settings_service.dart';
 import '../services/attachment_service.dart';
 import '../services/backup_service.dart';
 import '../services/url_metadata_service.dart';
@@ -94,6 +96,16 @@ final urlMetadataServiceProvider = Provider<UrlMetadataService>((ref) {
 final backupServiceProvider = Provider<BackupService>((ref) {
   return BackupService(ref.watch(databaseProvider));
 }, name: 'backupServiceProvider');
+
+/// AiSettingsService: liest/schreibt API-Key und Modell in eine JSON-Datei.
+final aiSettingsServiceProvider = Provider<AiSettingsService>((ref) {
+  return AiSettingsService();
+}, name: 'aiSettingsServiceProvider');
+
+/// AiEnrichService: ruft die Anthropic Messages-API auf.
+final aiEnrichServiceProvider = Provider<AiEnrichService>((ref) {
+  return AiEnrichService(ref.watch(aiSettingsServiceProvider));
+}, name: 'aiEnrichServiceProvider');
 
 // ── Workspace ─────────────────────────────────────────────────────────────
 
