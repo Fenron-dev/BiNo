@@ -22,6 +22,7 @@ import 'daos/entry_dao.dart';
 import 'daos/tag_dao.dart';
 import 'daos/container_dao.dart';
 import 'daos/attachment_dao.dart';
+import 'daos/property_dao.dart';
 
 // Der `part`-Direktive verweist auf die von drift_dev generierte Datei.
 // Sie enthält die _$AppDatabase-Basisklasse mit allen Query-Methoden.
@@ -54,6 +55,7 @@ part 'database.g.dart';
     TagDao,
     ContainerDao,
     AttachmentDao,
+    PropertyDao,
   ],
 )
 class AppDatabase extends _$AppDatabase {

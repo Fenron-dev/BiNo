@@ -15,6 +15,7 @@ import '../features/feed/feed_screen.dart';
 import '../features/projects/projects_screen.dart';
 import '../features/areas/areas_screen.dart';
 import '../features/entry_detail/entry_detail_screen.dart';
+import '../features/edit/edit_entry_screen.dart';
 import '../features/settings/settings_screen.dart';
 
 /// GoRouter als Riverpod-Provider.
@@ -65,6 +66,15 @@ final routerProvider = Provider<GoRouter>((ref) {
                     builder: (context, state) => EntryDetailScreen(
                       entryId: state.pathParameters['id']!,
                     ),
+                    routes: [
+                      GoRoute(
+                        // Vollpfad: /feed/detail/:id/edit
+                        path: 'edit',
+                        builder: (context, state) => EditEntryScreen(
+                          entryId: state.pathParameters['id']!,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

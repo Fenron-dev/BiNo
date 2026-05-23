@@ -113,6 +113,36 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
     }
   }
 
+  /// Beobachtet einen einzelnen Eintrag reaktiv.
+  ///
+  /// Gibt null zurück, wenn der Eintrag nicht existiert oder gelöscht wurde.
+  /// Wird in der Detailansicht genutzt, damit Änderungen (Edit, Pin) sofort
+  /// reflektiert werden, ohne den Provider manuell zu invalidieren.
+  Stream<Entry?> watchEntryById(String id) =>
+      (select(entries)..where((t) => t.id.equals(id))).watchSingleOrNull();
+
+  /// Aktualisiert die editierbaren Felder eines Eintrags.
+  ///
+  /// WARUM nur Titel, Body, Notizen und updatedAt?
+  /// Typ, Status, Pin und Anhänge haben eigene Methoden mit spezifischer Logik.
+  /// Schmale Updates reduzieren das Risiko, versehentlich andere Felder
+  /// zu überschreiben.
+  Future<void> updateEntryFields({
+    required String id,
+    String? title,
+    required String body,
+    String? notes,
+    required DateTime updatedAt,
+  }) =>
+      (update(entries)..where((t) => t.id.equals(id))).write(
+        EntriesCompanion(
+          title: Value(title),
+          body: Value(body),
+          notes: Value(notes),
+          updatedAt: Value(updatedAt),
+        ),
+      );
+
   /// Schaltet den Pinned-Status eines Eintrags um.
   Future<void> togglePin(String id) async {
     final entry = await getEntryById(id);

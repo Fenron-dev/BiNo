@@ -44,6 +44,9 @@ class EntryRepository {
   /// Gibt einen einzelnen Eintrag zurück, oder null wenn nicht gefunden.
   Future<Entry?> getEntryById(String id) => _entryDao.getEntryById(id);
 
+  /// Beobachtet einen einzelnen Eintrag reaktiv (für Detail- und Edit-Screen).
+  Stream<Entry?> watchEntryById(String id) => _entryDao.watchEntryById(id);
+
   /// Beobachtet alle Einträge als reaktiven Stream.
   ///
   /// Der Stream wird von Drift automatisch neu ausgelöst, wenn sich
@@ -95,6 +98,30 @@ class EntryRepository {
     });
 
     return id;
+  }
+
+  /// Aktualisiert Titel, Body und Notizen eines bestehenden Eintrags.
+  ///
+  /// Tags werden neu aus dem Body geparst und synchronisiert:
+  /// gelöschte Tags verlieren ihre Verknüpfung, neue werden angelegt.
+  Future<void> updateEntry({
+    required String id,
+    String? title,
+    required String body,
+    String? notes,
+  }) async {
+    final now = DateTime.now().toUtc();
+    await _entryDao.attachedDatabase.transaction(() async {
+      await _entryDao.updateEntryFields(
+        id: id,
+        title: title,
+        body: body,
+        notes: notes,
+        updatedAt: now,
+      );
+      // Tags neu synchronisieren: alte Links entfernen, neue setzen.
+      await _syncTagsForEntry(id: id, body: body, isUpdate: true);
+    });
   }
 
   /// Löscht einen Eintrag mit allen Anhängen (Dateisystem + DB) und Tag-Links.

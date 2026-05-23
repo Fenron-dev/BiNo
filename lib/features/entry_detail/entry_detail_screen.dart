@@ -22,12 +22,15 @@ import '../../data/db/database.dart' hide Container;
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 
-/// Lädt einen einzelnen Eintrag per ID. Wird beim Öffnen der Detailansicht
-/// einmalig aufgerufen; Pinnen/Löschen invalidieren den Provider nicht,
-/// da wir danach navigieren.
-final _entryProvider = FutureProvider.autoDispose
+/// Beobachtet einen einzelnen Eintrag reaktiv.
+///
+/// WARUM StreamProvider statt FutureProvider?
+/// Der Edit-Screen schreibt in die DB. StreamProvider reagiert automatisch
+/// auf Änderungen, ohne dass der Provider manuell invalidiert werden muss.
+/// Pinnen und Bearbeiten spiegeln sich sofort im AppBar-Icon und Titel wider.
+final _entryProvider = StreamProvider.autoDispose
     .family<Entry?, String>((ref, id) {
-  return ref.read(entryRepositoryProvider).getEntryById(id);
+  return ref.watch(entryRepositoryProvider).watchEntryById(id);
 });
 
 /// Beobachtet Anhänge reaktiv (Bild/Audio erscheinen sofort nach Capture).
@@ -56,8 +59,7 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
 
   Future<void> _togglePin(Entry entry) async {
     await ref.read(entryRepositoryProvider).togglePin(entry.id);
-    // Seite neu bauen damit das Pin-Icon sofort wechselt.
-    ref.invalidate(_entryProvider(widget.entryId));
+    // StreamProvider aktualisiert sich automatisch – kein manuelles Invalidate nötig.
   }
 
   Future<void> _confirmDelete(BuildContext context, Entry entry) async {
@@ -156,6 +158,14 @@ class _EntryView extends ConsumerWidget {
           style: theme.textTheme.titleSmall,
         ),
         actions: [
+          // Bearbeiten
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: 'Bearbeiten',
+            onPressed: isActing
+                ? null
+                : () => context.push('/feed/detail/${entry.id}/edit'),
+          ),
           // Pin / Unpin
           IconButton(
             icon: Icon(
