@@ -100,6 +100,11 @@ jobs:
           path: build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
           retention-days: 7
 
+      - name: Alten Release löschen (falls vorhanden)
+        run: gh release delete latest-debug --yes --cleanup-tag 2>/dev/null || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: GitHub Release erstellen
         uses: softprops/action-gh-release@v2
         with:
