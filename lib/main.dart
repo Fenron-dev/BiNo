@@ -7,14 +7,19 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'app.dart';
 
-void main() {
+void main() async {
   // WidgetsFlutterBinding.ensureInitialized() muss vor allen Plugin-
   // oder FFI-Aufrufen beim Start stehen. drift_flutter und sqlite3 nutzen
   // FFI/Plattformkanäle beim Öffnen der Datenbank.
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Lokalisierungsdaten für DateFormat('de_DE') laden – ohne diesen Aufruf
+  // wirft DateFormat eine LocaleDataException zur Laufzeit.
+  await initializeDateFormatting('de_DE');
 
   runApp(
     // ProviderScope: Wurzel des Riverpod-Provider-Baums.

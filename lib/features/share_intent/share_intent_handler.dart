@@ -91,19 +91,9 @@ class _ShareIntentHandlerState extends ConsumerState<ShareIntentHandler> {
     // Intent als verarbeitet markieren, damit er beim nächsten Start nicht
     // erneut verarbeitet wird.
     ReceiveSharingIntent.instance.reset();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            files.length == 1
-                ? 'Inhalt in BiNo gespeichert'
-                : '${files.length} Inhalte in BiNo gespeichert',
-          ),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
+    // Kein SnackBar hier: ShareIntentHandler sitzt oberhalb von MaterialApp
+    // und hat daher keinen ScaffoldMessenger-Vorfahren. Die gespeicherten
+    // Einträge erscheinen automatisch im Feed.
   }
 
   @override
