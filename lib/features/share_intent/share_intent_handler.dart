@@ -10,6 +10,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mime/mime.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 import '../../core/di.dart';
@@ -80,18 +81,49 @@ class _ShareIntentHandlerState extends ConsumerState<ShareIntentHandler> {
             }
 
           case SharedMediaType.image:
-            final entryId = await entryRepo.createEntry(
+            final imageEntryId = await entryRepo.createEntry(
               body: '',
               type: EntryType.image,
               sourceApp: 'share_intent',
             );
             await attachmentRepo.saveImage(
-              entryId: entryId,
+              entryId: imageEntryId,
               imageFile: File(file.path),
             );
 
+          case SharedMediaType.file:
+            // receive_sharing_intent liefert Audio-Dateien als SharedMediaType.file.
+            // MIME-Typ: zuerst vom Paket (file.mimeType), dann aus der Dateiendung.
+            final detectedMime =
+                file.mimeType ?? lookupMimeType(file.path) ?? '';
+            if (detectedMime.startsWith('audio/')) {
+              final audioEntryId = await entryRepo.createEntry(
+                body: '',
+                type: EntryType.audio,
+                sourceApp: 'share_intent',
+              );
+              await attachmentRepo.saveAudio(
+                entryId: audioEntryId,
+                audioFile: File(file.path),
+                mimeType: detectedMime,
+                durationMs: file.duration,
+              );
+            } else if (detectedMime.startsWith('image/')) {
+              final fileImageId = await entryRepo.createEntry(
+                body: '',
+                type: EntryType.image,
+                sourceApp: 'share_intent',
+              );
+              await attachmentRepo.saveImage(
+                entryId: fileImageId,
+                imageFile: File(file.path),
+                mimeType: detectedMime,
+              );
+            }
+            // Andere Dateitypen (Video, PDF, …) werden in späteren Phasen unterstützt.
+
           default:
-            // Andere Typen (Video, etc.) werden in späteren Phasen unterstützt.
+            // Video und unbekannte Typen werden in späteren Phasen unterstützt.
             break;
         }
       } catch (e) {

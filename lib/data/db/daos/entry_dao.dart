@@ -72,31 +72,29 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
   Future<Entry?> getEntryById(String id) =>
       (select(entries)..where((t) => t.id.equals(id))).getSingleOrNull();
 
-  /// Durchsucht Einträge via FTS5-Index (Volltext-Suche).
+  /// Durchsucht Einträge via SQLite LIKE (Teilstring-Suche).
   ///
-  /// WARUM zweistufig (FTS5 → ID-Liste → SELECT)?
-  /// Drift 2.x kennt entries_fts nicht als verwaltete Tabelle. customSelect
-  /// mit JOIN liefert QueryRow-Objekte, die sich nicht direkt zu Entry
-  /// mappen lassen. Der Umweg über UUIDs ermöglicht typsichere Drift-Queries.
-  ///
-  /// Prefix-Suche: 'hallo' matcht 'hallo', 'hallosagen', 'hallwelt' usw.
+  /// WARUM LIKE statt FTS5?
+  /// FTS5 matcht nur Wortanfänge ("Zom*" findet "Zombie", aber "omb" nicht).
+  /// LIKE '%omb%' findet Teilstrings an beliebiger Position – nutzerfreundlicher.
+  /// LOWER() auf beiden Seiten macht die Suche case-insensitiv ohne Collation.
   Future<List<Entry>> searchEntries(String query) async {
     if (query.trim().isEmpty) return [];
 
-    // Multi-Wort-Prefix-Suche: jedes Wort wird einzeln mit * versehen.
-    final terms = query
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((t) => t.isNotEmpty)
-        .map((t) => '"${t.replaceAll('"', '""')}*"')
-        .join(' ');
+    final q = query.trim().toLowerCase();
+    // Sonderzeichen in LIKE-Mustern escapen: \ → \\, % → \%, _ → \_
+    final escaped = q
+        .replaceAll('\\', '\\\\')
+        .replaceAll('%', '\\%')
+        .replaceAll('_', '\\_');
+    final pattern = '%$escaped%';
 
     try {
       final ids = await customSelect(
-        'SELECT e.id FROM entries e '
-        'JOIN entries_fts ON entries_fts.rowid = e.rowid '
-        'WHERE entries_fts MATCH ?',
-        variables: [Variable.withString(terms)],
+        "SELECT id FROM entries "
+        "WHERE LOWER(body) LIKE ? ESCAPE '\\' "
+        "   OR LOWER(COALESCE(title,'')) LIKE ? ESCAPE '\\'",
+        variables: [Variable.withString(pattern), Variable.withString(pattern)],
         readsFrom: {entries},
       ).map((row) => row.read<String>('id')).get();
 
@@ -110,7 +108,6 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
             ]))
           .get();
     } catch (_) {
-      // Syntaktisch ungültige FTS5-Queries (z.B. einzelnes "(") → leere Liste.
       return [];
     }
   }

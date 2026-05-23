@@ -11,6 +11,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -69,20 +70,29 @@ class _AudioCaptureSheetState extends ConsumerState<AudioCaptureSheet> {
 
   /// Startet die Audioaufnahme und die parallele STT-Transkription.
   Future<void> _startRecording() async {
-    final hasPermission = await _recorder.hasPermission();
-    if (!hasPermission) {
+    // permission_handler statt record.hasPermission(): Gibt volle Kontrolle über
+    // den Berechtigungsstatus und erlaubt "Einstellungen öffnen" bei dauerhafter Ablehnung.
+    final status = await Permission.microphone.status;
+    final result = status.isGranted ? status : await Permission.microphone.request();
+
+    if (!result.isGranted) {
       if (mounted) {
-        // Dialog statt SnackBar: erklärt wo die Berechtigung aktiviert werden kann.
         await showDialog<void>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Mikrofon-Berechtigung fehlt'),
             content: const Text(
-              'BiNo benötigt Zugriff auf das Mikrofon.\n\n'
-              'Bitte erlaube den Zugriff unter:\n'
-              'Einstellungen → Apps → BiNo → Berechtigungen → Mikrofon',
+              'BiNo benötigt Zugriff auf das Mikrofon für Audioaufnahmen.',
             ),
             actions: [
+              if (result.isPermanentlyDenied)
+                TextButton(
+                  onPressed: () async {
+                    Navigator.of(ctx).pop();
+                    await openAppSettings();
+                  },
+                  child: const Text('Einstellungen öffnen'),
+                ),
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(),
                 child: const Text('OK'),
