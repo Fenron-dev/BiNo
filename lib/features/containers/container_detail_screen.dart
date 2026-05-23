@@ -44,10 +44,9 @@ class ContainerDetailScreen extends ConsumerWidget {
 
   Future<void> _editContainer(BuildContext context, WidgetRef ref) async {
     final dao = ref.read(containerDaoProvider);
-    final result = await showContainerFormSheet(
-      context,
-      existing: null, // Wir bauen das Container-Objekt manuell
-    );
+    final existing = await dao.getContainerById(containerId);
+    if (!context.mounted) return;
+    final result = await showContainerFormSheet(context, existing: existing);
     if (result == null) return;
     await dao.updateContainer(
       id: containerId,

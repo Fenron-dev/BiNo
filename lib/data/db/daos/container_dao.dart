@@ -25,6 +25,10 @@ class ContainerDao extends DatabaseAccessor<AppDatabase>
 
   // ── Lesen ─────────────────────────────────────────────────────────────────
 
+  /// Gibt einen Container anhand seiner ID zurück (für Pre-Fill im Edit-Formular).
+  Future<Container?> getContainerById(String id) =>
+      (select(containers)..where((t) => t.id.equals(id))).getSingleOrNull();
+
   /// Gibt alle nicht-archivierten Container zurück, gefiltert nach 'kind'.
   Future<List<Container>> getContainersByKind(String kind) =>
       (select(containers)

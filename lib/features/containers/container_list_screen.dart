@@ -9,8 +9,6 @@
 import 'package:flutter/material.dart' hide Container;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:uuid/uuid.dart';
-import 'package:drift/drift.dart' show Value;
 
 import '../../core/constants.dart';
 import '../../core/di.dart';
@@ -42,24 +40,6 @@ class ContainerListScreen extends ConsumerWidget {
   String get _emptyHint => kind == 'project'
       ? 'Erstelle dein erstes Projekt mit "+".'
       : 'Erstelle deinen ersten Bereich mit "+".';
-
-  Future<void> _create(BuildContext context, WidgetRef ref) async {
-    final result = await showContainerFormSheet(context);
-    if (result == null) return;
-    const uuid = Uuid();
-    await ref.read(containerDaoProvider).insertContainer(
-          ContainersCompanion.insert(
-            id: uuid.v4(),
-            kind: kind,
-            name: result['name']!,
-            description: Value(
-              result['description']!.isEmpty ? null : result['description'],
-            ),
-            icon: Value(result['icon']!),
-            color: Value(result['color']!),
-          ),
-        );
-  }
 
   Future<void> _edit(
     BuildContext context,
@@ -115,12 +95,6 @@ class ContainerListScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: Text(_title)),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'fab_$kind',
-        onPressed: () => _create(context, ref),
-        tooltip: '$_title erstellen',
-        child: const Icon(Icons.add),
-      ),
       body: containersAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, __) => const Center(child: Text('Fehler beim Laden.')),

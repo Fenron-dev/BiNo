@@ -5,20 +5,32 @@
 // ABHÄNGIGKEITEN: go_router (StatefulNavigationShell), CaptureSheet, AudioCaptureSheet.
 // PHASE: 1 – Feed, Projekte, Bereiche + FAB. Phase 2: Long-Press → AudioCaptureSheet.
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Container;
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 
+import 'package:drift/drift.dart' show Value;
+
+import 'core/di.dart';
+import 'data/db/database.dart';
 import 'features/capture/capture_sheet.dart';
 import 'features/capture/audio_capture_sheet.dart';
+import 'features/containers/container_form_sheet.dart';
 
-/// App-Hülle mit persistenter Bottom-Navigation und zentralem FAB.
+/// App-Hülle mit persistenter Bottom-Navigation und kontextsensitivem FAB.
 ///
 /// WARUM BottomAppBar + FAB statt NavigationBar?
 /// Material 3's NavigationBar unterstützt keinen eingebetteten Center-FAB.
 /// BottomAppBar mit CircularNotchedRectangle + FloatingActionButtonLocation.centerDocked
 /// ist das korrekte Material-3-Muster für diese Layout-Anforderung (WhatsApp-/Telegram-Stil).
-class AppShell extends StatelessWidget {
+///
+/// FAB-Verhalten nach Tab:
+/// - Feed (0): Kurztippen → CaptureSheet, Long-Press → AudioCaptureSheet
+/// - Projekte (1): Kurztippen → neues Projekt erstellen
+/// - Bereiche (2): Kurztippen → neuen Bereich erstellen
+class AppShell extends ConsumerWidget {
   final StatefulNavigationShell navigationShell;
 
   const AppShell({super.key, required this.navigationShell});
@@ -39,10 +51,7 @@ class AppShell extends StatelessWidget {
   void _openCaptureSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      // isScrollControlled: true erlaubt dem Sheet, sich bei erscheinender
-      // Tastatur nach oben zu schieben. CaptureSheet rechnet mit viewInsets.
       isScrollControlled: true,
-      // useSafeArea: verhindert Überlappung mit System-Navigationsleiste.
       useSafeArea: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -51,15 +60,13 @@ class AppShell extends StatelessWidget {
     );
   }
 
-  /// Öffnet das Audio-Capture-Sheet (Long-Press auf FAB).
+  /// Öffnet das Audio-Capture-Sheet (Long-Press auf FAB im Feed-Tab).
   void _openAudioCaptureSheet(BuildContext context) {
-    // Haptisches Feedback signalisiert dem Nutzer den Long-Press-Modus.
     HapticFeedback.mediumImpact();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      // isDismissible: false – Aufnahme soll nicht versehentlich geschlossen werden.
       isDismissible: false,
       enableDrag: false,
       shape: const RoundedRectangleBorder(
@@ -69,21 +76,56 @@ class AppShell extends StatelessWidget {
     );
   }
 
+  /// FAB-Aktion je nach aktivem Tab.
+  Future<void> _onFabPressed(BuildContext context, WidgetRef ref) async {
+    switch (navigationShell.currentIndex) {
+      case 0:
+        _openCaptureSheet(context);
+      case 1:
+        await _createContainer(context, ref, 'project');
+      case 2:
+        await _createContainer(context, ref, 'area');
+    }
+  }
+
+  /// Öffnet das ContainerFormSheet und legt den neuen Container an.
+  Future<void> _createContainer(
+    BuildContext context,
+    WidgetRef ref,
+    String kind,
+  ) async {
+    final result = await showContainerFormSheet(context);
+    if (result == null) return;
+    await ref.read(containerDaoProvider).insertContainer(
+          ContainersCompanion.insert(
+            id: const Uuid().v4(),
+            kind: kind,
+            name: result['name']!,
+            description: Value(
+              result['description']!.isEmpty ? null : result['description'],
+            ),
+            icon: Value(result['icon']!),
+            color: Value(result['color']!),
+          ),
+        );
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isOnFeed = navigationShell.currentIndex == 0;
+
     return Scaffold(
       // extendBody: true lässt den Inhalt unter die BottomAppBar rendern.
-      // Notwendig damit der FeedScreen den unteren Padding korrekt berechnen kann.
       extendBody: true,
       body: navigationShell,
 
-      // GestureDetector wrappet den FAB für Long-Press-Unterstützung.
+      // GestureDetector wrappet den FAB für Long-Press (nur im Feed-Tab).
       // WICHTIG: Kein 'tooltip' auf dem FAB – Tooltip registriert intern
       // einen eigenen onLongPress-Handler, der den GestureDetector aussticht.
       floatingActionButton: GestureDetector(
-        onLongPress: () => _openAudioCaptureSheet(context),
+        onLongPress: isOnFeed ? () => _openAudioCaptureSheet(context) : null,
         child: FloatingActionButton(
-          onPressed: () => _openCaptureSheet(context),
+          onPressed: () => _onFabPressed(context, ref),
           child: const Icon(Icons.add),
         ),
       ),
