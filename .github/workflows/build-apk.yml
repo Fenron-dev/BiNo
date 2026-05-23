@@ -29,8 +29,18 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Android SDK Lizenzen akzeptieren
-        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+      - name: Android SDK Lizenzen + Plattformen installieren
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          # Flutter 3.41.x braucht compileSdk 35 oder 36 – auf dem Runner fehlen
+          # diese Plattformen oft. build-tools werden für APK-Signierung benötigt.
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "platforms;android-36" \
+            "platforms;android-35" \
+            "build-tools;36.0.0" \
+            "build-tools;35.0.0" || true
+          echo "=== Installierte SDK-Plattformen ==="
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list_installed 2>/dev/null | grep -E "platforms|build-tools" | head -20
 
       # 'flutter root' existiert nicht – Flutter-Pfad über 'which flutter' ermitteln.
       # continue-on-error: true damit ein Skript-Fehler nicht den Build blockiert.
@@ -66,9 +76,19 @@ jobs:
       - name: build_runner
         run: dart run build_runner build --delete-conflicting-outputs
 
-      # --verbose zeigt den vollständigen Gradle-Output falls der Build scheitert.
+      # Bei Fehler: gefilterte Fehlerzeilen am Ende ausgeben → direkt sichtbar im Log.
       - name: flutter build apk
-        run: flutter build apk --debug --split-per-abi --verbose
+        run: |
+          flutter build apk --debug --split-per-abi 2>&1 | tee /tmp/build.log
+          EXIT=${PIPESTATUS[0]}
+          if [ $EXIT -ne 0 ]; then
+            echo ""
+            echo "════════════ GRADLE FEHLER (gefiltert) ════════════"
+            grep -E "FAILURE:|BUILD FAILED|Execution failed|> Task|error:|Could not|Exception" \
+              /tmp/build.log | grep -v "^$" | head -40
+            echo "════════════════════════════════════════════════════"
+            exit $EXIT
+          fi
 
       - name: APK-Pfade prüfen
         run: ls -lh build/app/outputs/flutter-apk/
