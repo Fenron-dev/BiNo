@@ -65,6 +65,18 @@ class PropertyDao extends DatabaseAccessor<AppDatabase>
             ))
           .getSingleOrNull();
 
+  /// Findet eine Definition anhand ihres Namens in einem Workspace.
+  Future<PropertyDefinition?> findDefinitionByName(
+    String workspaceId,
+    String name,
+  ) =>
+      (select(propertyDefinitions)
+            ..where(
+              (t) =>
+                  t.workspaceId.equals(workspaceId) & t.name.equals(name),
+            ))
+          .getSingleOrNull();
+
   /// Legt einen neuen Property-Wert an.
   Future<void> insertProperty(EntryPropertiesCompanion prop) =>
       into(entryProperties).insert(prop);

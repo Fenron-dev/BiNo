@@ -4,19 +4,25 @@
 //        Wird einmalig in main.dart initialisiert und hört auf Intents während
 //        der gesamten App-Lebensdauer.
 // ABHÄNGIGKEITEN: receive_sharing_intent, entryRepositoryProvider,
-//                 attachmentRepositoryProvider.
+//                 attachmentRepositoryProvider, propertyDaoProvider.
 // PHASE: 2 – Share-to-Capture via Android Share-Intent.
 
+import 'dart:convert';
 import 'dart:io';
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:metadata_god/metadata_god.dart';
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as p;
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../core/di.dart';
+import '../../data/db/database.dart' hide Container;
+import '../../data/db/daos/property_dao.dart';
 import '../../data/db/tables/entries.dart';
+import '../../data/db/tables/property_definitions.dart';
 
 /// Verarbeitet eingehende Share-Intents und speichert sie als Einträge.
 ///
@@ -34,6 +40,8 @@ class ShareIntentHandler extends ConsumerStatefulWidget {
 }
 
 class _ShareIntentHandlerState extends ConsumerState<ShareIntentHandler> {
+  static const _uuid = Uuid();
+
   /// Subscription auf Intents während die App läuft.
   late final Stream<List<SharedMediaFile>> _intentStream;
 
@@ -54,6 +62,8 @@ class _ShareIntentHandlerState extends ConsumerState<ShareIntentHandler> {
 
     final entryRepo = ref.read(entryRepositoryProvider);
     final attachmentRepo = ref.read(attachmentRepositoryProvider);
+    final propertyDao = ref.read(propertyDaoProvider);
+    final workspaceId = ref.read(activeWorkspaceProvider);
 
     for (final file in files) {
       try {
@@ -67,12 +77,21 @@ class _ShareIntentHandlerState extends ConsumerState<ShareIntentHandler> {
               // nur der rohen URL erscheinen.
               final urlService = ref.read(urlMetadataServiceProvider);
               final meta = await urlService.fetch(text);
-              await entryRepo.createEntry(
+              final entryId = await entryRepo.createEntry(
                 title: meta?.title,
                 body: meta?.description ?? text,
                 type: EntryType.link,
                 sourceUrl: text,
                 sourceApp: 'share_intent',
+              );
+              // Quelle als klickbare Property speichern.
+              await _saveProperty(
+                propertyDao: propertyDao,
+                workspaceId: workspaceId,
+                entryId: entryId,
+                name: 'Quelle',
+                type: PropertyFieldType.url,
+                jsonValue: jsonEncode(text),
               );
             } else {
               await entryRepo.createEntry(
@@ -122,13 +141,12 @@ class _ShareIntentHandlerState extends ConsumerState<ShareIntentHandler> {
               final title = (meta?.title?.isNotEmpty == true)
                   ? meta!.title!
                   : _filenameWithout(file.path);
-              final body = _formatAudioMeta(meta);
               final durationMs =
                   meta?.duration?.inMilliseconds ?? file.duration;
 
               final audioEntryId = await entryRepo.createEntry(
                 title: title,
-                body: body,
+                body: '',
                 type: EntryType.audio,
                 sourceApp: 'share_intent',
               );
@@ -137,6 +155,13 @@ class _ShareIntentHandlerState extends ConsumerState<ShareIntentHandler> {
                 audioFile: File(file.path),
                 mimeType: detectedMime,
                 durationMs: durationMs,
+              );
+              // Metadaten-Felder als Properties statt als Body-Text.
+              await _saveAudioMetaAsProperties(
+                propertyDao: propertyDao,
+                workspaceId: workspaceId,
+                entryId: audioEntryId,
+                meta: meta,
               );
             } else if (detectedMime.startsWith('image/')) {
               final fileImageId = await entryRepo.createEntry(
@@ -172,7 +197,6 @@ class _ShareIntentHandlerState extends ConsumerState<ShareIntentHandler> {
                 sourceApp: 'share_intent',
               );
             }
-
         }
       } catch (e) {
         // Fehler beim Verarbeiten eines einzelnen Intents sollen die anderen
@@ -187,6 +211,108 @@ class _ShareIntentHandlerState extends ConsumerState<ShareIntentHandler> {
     // Kein SnackBar hier: ShareIntentHandler sitzt oberhalb von MaterialApp
     // und hat daher keinen ScaffoldMessenger-Vorfahren. Die gespeicherten
     // Einträge erscheinen automatisch im Feed.
+  }
+
+  /// Speichert Audio-Metadaten als einzelne Properties (statt als Body-Text).
+  Future<void> _saveAudioMetaAsProperties({
+    required PropertyDao propertyDao,
+    required String workspaceId,
+    required String entryId,
+    required Metadata? meta,
+  }) async {
+    if (meta == null) return;
+    if (meta.artist?.isNotEmpty == true) {
+      await _saveProperty(
+        propertyDao: propertyDao,
+        workspaceId: workspaceId,
+        entryId: entryId,
+        name: 'Interpret',
+        type: PropertyFieldType.text,
+        jsonValue: jsonEncode(meta.artist),
+      );
+    }
+    if (meta.album?.isNotEmpty == true) {
+      await _saveProperty(
+        propertyDao: propertyDao,
+        workspaceId: workspaceId,
+        entryId: entryId,
+        name: 'Album',
+        type: PropertyFieldType.text,
+        jsonValue: jsonEncode(meta.album),
+      );
+    }
+    if (meta.genre?.isNotEmpty == true) {
+      await _saveProperty(
+        propertyDao: propertyDao,
+        workspaceId: workspaceId,
+        entryId: entryId,
+        name: 'Genre',
+        type: PropertyFieldType.text,
+        jsonValue: jsonEncode(meta.genre),
+      );
+    }
+    if (meta.year != null) {
+      await _saveProperty(
+        propertyDao: propertyDao,
+        workspaceId: workspaceId,
+        entryId: entryId,
+        name: 'Jahr',
+        type: PropertyFieldType.text,
+        jsonValue: jsonEncode(meta.year.toString()),
+      );
+    }
+    if (meta.trackNumber != null) {
+      await _saveProperty(
+        propertyDao: propertyDao,
+        workspaceId: workspaceId,
+        entryId: entryId,
+        name: 'Track',
+        type: PropertyFieldType.number,
+        jsonValue: meta.trackNumber.toString(),
+      );
+    }
+  }
+
+  /// Findet oder erstellt eine PropertyDefinition und speichert den Wert.
+  ///
+  /// WARUM find-or-create?
+  /// Geteilte Dateien sollen Definitionen workspace-weit teilen. Beim zweiten
+  /// Import einer MP3 existiert "Interpret" bereits – kein Duplikat entstehen.
+  Future<void> _saveProperty({
+    required PropertyDao propertyDao,
+    required String workspaceId,
+    required String entryId,
+    required String name,
+    required PropertyFieldType type,
+    required String jsonValue,
+  }) async {
+    var def = await propertyDao.findDefinitionByName(workspaceId, name);
+    if (def == null) {
+      final defId = _uuid.v4();
+      await propertyDao.insertDefinition(
+        PropertyDefinitionsCompanion.insert(
+          id: defId,
+          workspaceId: Value(workspaceId),
+          name: name,
+          fieldType: type.name,
+        ),
+      );
+      def = await propertyDao.findDefinitionByName(workspaceId, name);
+      if (def == null) return;
+    }
+
+    // Nur einfügen wenn noch kein Wert für diesen Eintrag vorhanden ist.
+    final existing = await propertyDao.findPropertyValue(entryId, def.id);
+    if (existing != null) return;
+
+    await propertyDao.insertProperty(
+      EntryPropertiesCompanion.insert(
+        id: _uuid.v4(),
+        entryId: entryId,
+        propertyId: def.id,
+        value: Value(jsonValue),
+      ),
+    );
   }
 
   /// Dateiname ohne Erweiterung als Titelvorschlag.
@@ -210,24 +336,6 @@ class _ShareIntentHandlerState extends ConsumerState<ShareIntentHandler> {
     } catch (_) {
       return null;
     }
-  }
-
-  /// Formatiert Audio-Metadaten als lesbaren Body-Text.
-  ///
-  /// Gibt einen leeren String zurück, wenn keine relevanten Felder vorhanden sind.
-  String _formatAudioMeta(Metadata? meta) {
-    if (meta == null) return '';
-    final lines = <String>[];
-    if (meta.artist?.isNotEmpty == true) lines.add('Interpret: ${meta.artist}');
-    if (meta.album?.isNotEmpty == true) {
-      final albumLine = meta.year != null
-          ? 'Album: ${meta.album} (${meta.year})'
-          : 'Album: ${meta.album}';
-      lines.add(albumLine);
-    }
-    if (meta.genre?.isNotEmpty == true) lines.add('Genre: ${meta.genre}');
-    if (meta.trackNumber != null) lines.add('Track: ${meta.trackNumber}');
-    return lines.join('\n');
   }
 
   @override

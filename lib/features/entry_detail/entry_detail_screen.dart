@@ -6,7 +6,6 @@
 //                 path_provider, path.
 // PHASE: 3 – Detail-Ansicht, Audio-Wiedergabe, Pin/Unpin, Löschen.
 
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -17,6 +16,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'dart:convert';
 
@@ -298,15 +298,25 @@ class _EntryView extends ConsumerWidget {
             },
           ),
 
-          // URL-Quelle
+          // URL-Quelle (Fallback für ältere Einträge ohne "Quelle"-Property)
           if (entry.sourceUrl != null) ...[
             const SizedBox(height: 16),
             const Divider(),
             const SizedBox(height: 4),
-            Text(
-              entry.sourceUrl!,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.primary,
+            GestureDetector(
+              onTap: () async {
+                final uri = Uri.tryParse(entry.sourceUrl!);
+                if (uri != null) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                }
+              },
+              child: Text(
+                entry.sourceUrl!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                  decoration: TextDecoration.underline,
+                  decorationColor: theme.colorScheme.primary,
+                ),
               ),
             ),
           ],
@@ -420,8 +430,31 @@ class _PropertyRow extends StatelessWidget {
               .toList(),
         );
 
+      case PropertyFieldType.url:
+        String urlDisplay = raw;
+        try {
+          final decoded = jsonDecode(raw);
+          if (decoded is String) urlDisplay = decoded;
+        } catch (_) {}
+        return GestureDetector(
+          onTap: () async {
+            final uri = Uri.tryParse(urlDisplay);
+            if (uri != null) {
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
+            }
+          },
+          child: Text(
+            urlDisplay,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.primary,
+              decoration: TextDecoration.underline,
+              decorationColor: theme.colorScheme.primary,
+            ),
+          ),
+        );
+
       default:
-        // text, number, date, url, link, select → einfach dekodieren
+        // text, number, date, link, select → einfach dekodieren
         String display = raw;
         try {
           final decoded = jsonDecode(raw);
@@ -626,44 +659,19 @@ class _AudioPlayerWidget extends StatefulWidget {
 class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
   late final Player _player;
   bool _isLoaded = false;
-
-  /// Vom Player-Stream gemeldete Gesamtdauer (asynchron nach Datei-Parse).
-  Duration _streamDuration = Duration.zero;
-  StreamSubscription<Duration>? _durationSub;
+  String? _loadError;
 
   @override
   void initState() {
     super.initState();
     _player = Player();
-    // stream.duration feuert sobald der Player die Datei-Header geparst hat.
-    _durationSub = _player.stream.duration.listen((d) {
-      if (mounted && d.inMilliseconds > 0) {
-        setState(() => _streamDuration = d);
-      }
-    });
     _loadAudio();
   }
 
   @override
   void dispose() {
-    _durationSub?.cancel();
     _player.dispose();
     super.dispose();
-  }
-
-  /// Gibt die zuverlässigste Gesamtdauer zurück.
-  ///
-  /// WARUM diese Priorität?
-  /// Selbst aufgenommene AAC/M4A-Dateien (via `record`-Paket) haben manchmal
-  /// fehlerhafte Dauer-Metadaten im Container-Header, die media_kit falsch
-  /// interpretiert. Der Timer-gemessene Wert aus durationMs ist korrekt.
-  Duration get _effectiveDuration {
-    if (widget.attachment.durationMs != null &&
-        widget.attachment.durationMs! > 0) {
-      return Duration(milliseconds: widget.attachment.durationMs!);
-    }
-    if (_streamDuration.inMilliseconds > 0) return _streamDuration;
-    return _player.state.duration;
   }
 
   Future<void> _loadAudio() async {
@@ -671,10 +679,19 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
       final appDir = await getApplicationDocumentsDirectory();
       final path =
           p.join(appDir.path, 'attachments', widget.attachment.filePath);
+
+      final file = File(path);
+      if (!await file.exists()) {
+        debugPrint('_AudioPlayerWidget: Datei nicht gefunden: $path');
+        if (mounted) setState(() => _loadError = 'Datei nicht gefunden');
+        return;
+      }
+
       await _player.open(Media(Uri.file(path).toString()), play: false);
       if (mounted) setState(() => _isLoaded = true);
-    } catch (_) {
-      // Datei nicht lesbar – Player bleibt deaktiviert.
+    } catch (e) {
+      debugPrint('_AudioPlayerWidget: Ladefehler: $e');
+      if (mounted) setState(() => _loadError = e.toString());
     }
   }
 
@@ -692,6 +709,31 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    // Ladefehler anzeigen statt leerem Player
+    if (_loadError != null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.errorContainer,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, color: theme.colorScheme.onErrorContainer),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _loadError!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onErrorContainer,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -747,7 +789,12 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
               stream: _player.stream.position,
               builder: (context, posSnap) {
                 final position = posSnap.data ?? Duration.zero;
-                final duration = _effectiveDuration;
+                // Gespeicherte Dauer hat Priorität: korrigiert fehlerhafte
+                // M4A-Header bei selbst aufgenommenen Dateien.
+                final storedMs = widget.attachment.durationMs;
+                final duration = (storedMs != null && storedMs > 0)
+                    ? Duration(milliseconds: storedMs)
+                    : _player.state.duration;
                 final progress = duration.inMilliseconds > 0
                     ? (position.inMilliseconds / duration.inMilliseconds)
                         .clamp(0.0, 1.0)
