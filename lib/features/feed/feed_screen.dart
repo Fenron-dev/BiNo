@@ -10,6 +10,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:intl/intl.dart';
+
 import '../../core/constants.dart';
 import '../../core/di.dart';
 import '../../data/db/database.dart' hide Container;
@@ -170,46 +172,117 @@ class _FeedView extends ConsumerStatefulWidget {
 }
 
 class _FeedViewState extends ConsumerState<_FeedView> {
+  String? _activeFilter;
+  bool _dismissedOnThisDay = false;
+
+  static const _kFilters = <(String, String, IconData)>[
+    ('text', 'Text', Icons.text_fields_outlined),
+    ('link', 'Link', Icons.link_outlined),
+    ('image', 'Bild', Icons.image_outlined),
+    ('audio', 'Audio', Icons.mic_none_outlined),
+    ('pinned', 'Angepinnt', Icons.push_pin_outlined),
+  ];
+
+  List<Entry> _applyFilter(List<Entry> all) {
+    if (_activeFilter == null) return all;
+    if (_activeFilter == 'pinned') return all.where((e) => e.pinned).toList();
+    return all.where((e) => e.type == _activeFilter).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final entriesAsync = ref.watch(feedEntriesProvider);
 
-    return entriesAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stack) => _ErrorView(
-        error: error,
-        onRetry: () => ref.invalidate(feedEntriesProvider),
-      ),
-      data: (entries) {
-        if (entries.length > widget.previousEntryCount &&
-            widget.previousEntryCount > 0) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            widget.onScrollToBottom();
-          });
-        }
-        if (widget.previousEntryCount == 0 && entries.isNotEmpty) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            widget.onScrollToBottom(animate: false);
-          });
-        }
-        widget.onCountUpdate(entries.length);
+    return Column(
+      children: [
+        // „Heute vor …"-Banner (erscheint einmalig pro Session, schließbar)
+        if (!_dismissedOnThisDay)
+          _OnThisDayBanner(
+            onDismiss: () => setState(() => _dismissedOnThisDay = true),
+          ),
 
-        if (entries.isEmpty) return const _EmptyFeedPlaceholder();
+        // Filter-Chips
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilterChip(
+                  label: const Text('Alle'),
+                  selected: _activeFilter == null,
+                  onSelected: (_) => setState(() => _activeFilter = null),
+                ),
+              ),
+              ..._kFilters.map(
+                (f) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilterChip(
+                    avatar: Icon(f.$3, size: 16),
+                    label: Text(f.$2),
+                    selected: _activeFilter == f.$1,
+                    onSelected: (v) =>
+                        setState(() => _activeFilter = v ? f.$1 : null),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
 
-        return ListView.builder(
-          controller: widget.scrollController,
-          reverse: true,
-          padding: const EdgeInsets.only(top: 8, bottom: 88),
-          itemCount: entries.length,
-          itemBuilder: (context, index) {
-            final entry = entries[entries.length - 1 - index];
-            return _SwipableEntryCard(
-              key: ValueKey(entry.id),
-              entry: entry,
-            );
-          },
-        );
-      },
+        // Eintrags-Liste
+        Expanded(
+          child: entriesAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, stack) => _ErrorView(
+              error: error,
+              onRetry: () => ref.invalidate(feedEntriesProvider),
+            ),
+            data: (allEntries) {
+              // Auto-Scroll anhand ungefilterer Gesamtanzahl (verhindert
+              // falschen Scroll-Trigger beim Filterwechsel).
+              if (allEntries.length > widget.previousEntryCount &&
+                  widget.previousEntryCount > 0) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  widget.onScrollToBottom();
+                });
+              }
+              if (widget.previousEntryCount == 0 && allEntries.isNotEmpty) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  widget.onScrollToBottom(animate: false);
+                });
+              }
+              widget.onCountUpdate(allEntries.length);
+
+              final entries = _applyFilter(allEntries);
+
+              if (entries.isEmpty) {
+                if (_activeFilter != null) {
+                  return const Center(
+                    child: Text('Keine Einträge für diesen Filter.'),
+                  );
+                }
+                return const _EmptyFeedPlaceholder();
+              }
+
+              return ListView.builder(
+                controller: widget.scrollController,
+                reverse: true,
+                padding: const EdgeInsets.only(top: 8, bottom: 88),
+                itemCount: entries.length,
+                itemBuilder: (context, index) {
+                  final entry = entries[entries.length - 1 - index];
+                  return _SwipableEntryCard(
+                    key: ValueKey(entry.id),
+                    entry: entry,
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -264,6 +337,165 @@ class _SwipableEntryCard extends ConsumerWidget {
         ref.read(entryRepositoryProvider).deleteEntry(entry.id);
       },
       child: EntryCard(entry: entry),
+    );
+  }
+}
+
+// ── Heute vor … ──────────────────────────────────────────────────────────────
+
+class _OnThisDayBanner extends ConsumerWidget {
+  final VoidCallback onDismiss;
+
+  const _OnThisDayBanner({required this.onDismiss});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(onThisDayProvider);
+
+    return async.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (data) {
+        if (data.isEmpty) return const SizedBox.shrink();
+
+        final theme = Theme.of(context);
+        final fmt = DateFormat('dd. MMMM yyyy', 'de_DE');
+
+        return ColoredBox(
+          color: theme.colorScheme.secondaryContainer.withAlpha(80),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 4, 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.history_outlined,
+                        size: 16, color: theme.colorScheme.secondary),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Heute vor …',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: theme.colorScheme.secondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      visualDensity: VisualDensity.compact,
+                      color: theme.colorScheme.onSurfaceVariant,
+                      onPressed: onDismiss,
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(
+                height: 100,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  itemCount: data.fold(0, (sum, g) => sum + g.entries.length),
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    // Flache Liste: alle Einträge aller Jahre nacheinander
+                    int flat = index;
+                    for (final group in data) {
+                      if (flat < group.entries.length) {
+                        final entry = group.entries[flat];
+                        final yearsAgo = group.yearsAgo;
+                        final dateLabel =
+                            fmt.format(entry.createdAt.toLocal());
+                        final preview = (entry.title?.isNotEmpty == true
+                                ? entry.title!
+                                : entry.body)
+                            .substring(
+                                0,
+                                (entry.title?.isNotEmpty == true
+                                            ? entry.title!
+                                            : entry.body)
+                                        .length
+                                        .clamp(0, 80));
+                        return _OnThisDayCard(
+                          yearsAgo: yearsAgo,
+                          dateLabel: dateLabel,
+                          preview: preview,
+                          onTap: () =>
+                              context.push(AppRoutes.entryDetail(entry.id)),
+                        );
+                      }
+                      flat -= group.entries.length;
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _OnThisDayCard extends StatelessWidget {
+  final int yearsAgo;
+  final String dateLabel;
+  final String preview;
+  final VoidCallback onTap;
+
+  const _OnThisDayCard({
+    required this.yearsAgo,
+    required this.dateLabel,
+    required this.preview,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final label =
+        yearsAgo == 1 ? 'Vor einem Jahr' : 'Vor $yearsAgo Jahren';
+
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        width: 200,
+        child: Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.secondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  dateLabel,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Expanded(
+                  child: Text(
+                    preview,
+                    style: theme.textTheme.bodySmall,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

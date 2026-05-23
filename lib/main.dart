@@ -12,6 +12,8 @@ import 'package:media_kit/media_kit.dart';
 import 'package:metadata_god/metadata_god.dart';
 
 import 'app.dart';
+import 'core/di.dart';
+import 'services/theme_service.dart';
 
 void main() async {
   // WidgetsFlutterBinding.ensureInitialized() muss vor allen Plugin-
@@ -31,11 +33,17 @@ void main() async {
   // wirft DateFormat eine LocaleDataException zur Laufzeit.
   await initializeDateFormatting('de_DE');
 
+  // Theme vor dem ersten Frame laden, damit kein Flicker zwischen System-
+  // Default und Nutzereinstellung auftritt.
+  final initialTheme = await ThemeService().getThemeMode();
+
   runApp(
-    // ProviderScope: Wurzel des Riverpod-Provider-Baums.
-    // Alle ref.watch()-Aufrufe lösen Provider aus diesem Scope auf.
-    const ProviderScope(
-      child: BiNoApp(),
+    ProviderScope(
+      overrides: [
+        // Überschreibt den StateProvider-Initialwert mit dem gespeicherten Wert.
+        themeModeProvider.overrideWith((ref) => initialTheme),
+      ],
+      child: const BiNoApp(),
     ),
   );
 }

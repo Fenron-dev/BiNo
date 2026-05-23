@@ -15,6 +15,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/di.dart';
 import '../../services/ai_settings_service.dart';
 import '../../services/backup_service.dart';
+import '../../services/theme_service.dart';
 
 /// Einstellungen-Screen mit Backup/Restore-Funktion.
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -244,6 +245,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           const Divider(),
 
+          // ── Darstellung ────────────────────────────────────────────────
+          _SectionHeader(title: 'Darstellung'),
+          _ThemeSelector(),
+
+          const Divider(),
+
           // ── KI (AI-Anreicherung) ───────────────────────────────────────
           _SectionHeader(title: 'KI – Anreicherung'),
 
@@ -349,6 +356,44 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Theme-Auswahl ──────────────────────────────────────────────────────────────
+
+class _ThemeSelector extends ConsumerWidget {
+  const _ThemeSelector();
+
+  static const _options = [
+    (ThemeService.kSystem, 'System', 'Folgt dem Gerätemodus', Icons.brightness_auto_outlined),
+    (ThemeService.kLight, 'Hell', null, Icons.light_mode_outlined),
+    (ThemeService.kDark, 'Dunkel', null, Icons.dark_mode_outlined),
+    (ThemeService.kOled, 'OLED-Dunkel', 'Schwarze Pixel – spart Akku auf AMOLED', Icons.smartphone_outlined),
+  ];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final current = ref.watch(themeModeProvider);
+
+    return RadioGroup<String>(
+      groupValue: current,
+      onChanged: (v) async {
+        if (v == null) return;
+        ref.read(themeModeProvider.notifier).state = v;
+        await ref.read(themeServiceProvider).save(v);
+      },
+      child: Column(
+        children: _options.map((opt) {
+          final (value, label, subtitle, icon) = opt;
+          return RadioListTile<String>(
+            secondary: Icon(icon),
+            title: Text(label),
+            subtitle: subtitle != null ? Text(subtitle) : null,
+            value: value,
+          );
+        }).toList(),
       ),
     );
   }

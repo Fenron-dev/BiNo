@@ -10,9 +10,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/di.dart';
 import 'core/theme.dart';
 import 'core/router.dart';
 import 'features/share_intent/share_intent_handler.dart';
+import 'services/theme_service.dart';
 
 /// Haupteinstieg-Widget der App.
 ///
@@ -23,17 +25,22 @@ class BiNoApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+    final themeMode = ref.watch(themeModeProvider);
+
+    final (flutterThemeMode, effectiveDarkTheme) = switch (themeMode) {
+      ThemeService.kLight => (ThemeMode.light, AppTheme.darkTheme),
+      ThemeService.kDark => (ThemeMode.dark, AppTheme.darkTheme),
+      ThemeService.kOled => (ThemeMode.dark, AppTheme.oledDarkTheme),
+      _ => (ThemeMode.system, AppTheme.darkTheme), // kSystem + Fallback
+    };
 
     return ShareIntentHandler(
       child: MaterialApp.router(
         title: 'BiNo',
         debugShowCheckedModeBanner: false,
-
-        // Theme folgt dem System-Setting. Phase 6: User-Override via Riverpod-Provider.
         theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: ThemeMode.system,
-
+        darkTheme: effectiveDarkTheme,
+        themeMode: flutterThemeMode,
         routerConfig: router,
       ),
     );

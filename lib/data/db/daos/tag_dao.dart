@@ -44,6 +44,16 @@ class TagDao extends DatabaseAccessor<AppDatabase> with _$TagDaoMixin {
   Future<int> unlinkAllTagsFromEntry(String entryId) =>
       (delete(entryTags)..where((t) => t.entryId.equals(entryId))).go();
 
+  /// Gibt alle Tags zurück, die einem Eintrag zugeordnet sind (One-Shot).
+  /// Wird vom MarkdownExportService genutzt, um Tags in das Frontmatter zu schreiben.
+  Future<List<Tag>> getTagsForEntry(String entryId) {
+    final query = select(tags).join([
+      innerJoin(entryTags, entryTags.tagId.equalsExp(tags.id)),
+    ])
+      ..where(entryTags.entryId.equals(entryId));
+    return query.map((row) => row.readTable(tags)).get();
+  }
+
   /// Beobachtet alle Tags als reaktiven Stream (für Tag-Verwaltung in Phase 6).
   Stream<List<Tag>> watchAllTags() => select(tags).watch();
 }

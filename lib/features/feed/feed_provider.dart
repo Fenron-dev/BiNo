@@ -34,3 +34,28 @@ final searchResultsProvider = FutureProvider.autoDispose
     .family<List<Entry>, String>((ref, query) {
   return ref.read(entryRepositoryProvider).searchEntries(query);
 }, name: 'searchResultsProvider');
+
+// ── Heute vor … ───────────────────────────────────────────────────────────
+
+/// Einträge vom selben Kalender-Tag in vergangenen Jahren (max. 5 Jahre zurück).
+/// Typ: Liste aus (Jahre-zurück, Einträge-dieses-Tages).
+typedef OnThisDayData = List<({int yearsAgo, List<Entry> entries})>;
+
+final onThisDayProvider = FutureProvider<OnThisDayData>((ref) async {
+  final dao = ref.read(entryDaoProvider);
+  final today = DateTime.now();
+  final result = <({int yearsAgo, List<Entry> entries})>[];
+
+  for (var years = 1; years <= 5; years++) {
+    try {
+      final date = DateTime(today.year - years, today.month, today.day);
+      final start = date.toUtc();
+      final end = start.add(const Duration(days: 1));
+      final list = await dao.getEntriesForDateRange(start, end);
+      if (list.isNotEmpty) result.add((yearsAgo: years, entries: list));
+    } catch (_) {
+      // Ungültige Daten (z. B. 29. Feb in einem Nicht-Schaltjahr) überspringen.
+    }
+  }
+  return result;
+}, name: 'onThisDayProvider');

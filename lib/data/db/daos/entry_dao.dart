@@ -143,6 +143,19 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
         ),
       );
 
+  /// Gibt alle Einträge zurück, deren createdAt im Zeitfenster [start, end) liegt.
+  /// Wird vom onThisDayProvider genutzt, um Einträge vom gleichen Datum
+  /// in vergangenen Jahren zu laden.
+  Future<List<Entry>> getEntriesForDateRange(DateTime start, DateTime end) =>
+      (select(entries)
+            ..where(
+              (t) =>
+                  t.createdAt.isBiggerOrEqualValue(start) &
+                  t.createdAt.isSmallerThanValue(end),
+            )
+            ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]))
+          .get();
+
   /// Schaltet den Pinned-Status eines Eintrags um.
   Future<void> togglePin(String id) async {
     final entry = await getEntryById(id);

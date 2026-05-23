@@ -27,6 +27,7 @@ import '../../data/db/database.dart' hide Container;
 import '../../data/db/tables/property_definitions.dart';
 import '../containers/container_form_sheet.dart';
 import 'ai_enrich_sheet.dart';
+import '../../widgets/wikilink_text.dart';
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 
@@ -59,13 +60,14 @@ final _detailDefinitionsProvider = StreamProvider.autoDispose
   return ref.watch(propertyDaoProvider).watchDefinitionsForWorkspace(workspaceId);
 });
 
-/// Beobachtet die Container, denen ein Eintrag zugewiesen ist.
-/// List<dynamic> wird genutzt um den Drift-Container-Namenskonflikt mit
-/// Flutter's Container-Widget in dieser Datei zu umgehen.
+// List<dynamic> statt List<Container>: verhindert Namenskonflikt mit Flutter's
+// Container-Widget, das in dieser Datei via hide ausgeblendet ist.
 final _entryContainersProvider = StreamProvider.autoDispose
     .family<List<dynamic>, String>((ref, entryId) {
   return ref.watch(containerDaoProvider).watchContainersForEntry(entryId);
 });
+
+enum _EntryAction { exportMarkdown, delete }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -88,6 +90,42 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
   Future<void> _togglePin(Entry entry) async {
     await ref.read(entryRepositoryProvider).togglePin(entry.id);
     // StreamProvider aktualisiert sich automatisch – kein manuelles Invalidate nötig.
+  }
+
+  Future<void> _navigateToWikilink(
+      BuildContext context, Entry currentEntry, String title) async {
+    final results = await ref.read(entryRepositoryProvider).searchEntries(title);
+    final match = results
+        .where((e) =>
+            e.id != currentEntry.id &&
+            e.title?.toLowerCase() == title.toLowerCase())
+        .firstOrNull;
+    if (!context.mounted) return;
+    if (match != null) {
+      context.push(AppRoutes.entryDetail(match.id));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Kein Eintrag mit Titel „$title" gefunden')),
+      );
+    }
+  }
+
+  Future<void> _exportMarkdown(Entry entry) async {
+    final tags = await ref.read(tagDaoProvider).getTagsForEntry(entry.id);
+    final workspaceId = ref.read(activeWorkspaceProvider);
+    final props =
+        ref.read(_detailPropertiesProvider(entry.id)).valueOrNull ?? [];
+    final defs =
+        ref.read(_detailDefinitionsProvider(workspaceId)).valueOrNull ?? [];
+    final attachments =
+        ref.read(_attachmentsProvider(entry.id)).valueOrNull ?? [];
+    await ref.read(markdownExportServiceProvider).shareEntry(
+          entry: entry,
+          tags: tags,
+          properties: props,
+          definitions: defs,
+          attachments: attachments,
+        );
   }
 
   Future<void> _confirmDelete(BuildContext context, Entry entry) async {
@@ -151,6 +189,9 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
           isActing: _isActing,
           onTogglePin: () => _togglePin(entry),
           onDelete: () => _confirmDelete(context, entry),
+          onExportMarkdown: () => _exportMarkdown(entry),
+          onWikilinkTap: (title) =>
+              _navigateToWikilink(context, entry, title),
         );
       },
     );
@@ -164,12 +205,16 @@ class _EntryView extends ConsumerWidget {
   final bool isActing;
   final VoidCallback onTogglePin;
   final VoidCallback onDelete;
+  final VoidCallback onExportMarkdown;
+  final Future<void> Function(String title) onWikilinkTap;
 
   const _EntryView({
     required this.entry,
     required this.isActing,
     required this.onTogglePin,
     required this.onDelete,
+    required this.onExportMarkdown,
+    required this.onWikilinkTap,
   });
 
   @override
@@ -215,12 +260,35 @@ class _EntryView extends ConsumerWidget {
             tooltip: entry.pinned ? 'Losösen' : 'Anpinnen',
             onPressed: isActing ? null : onTogglePin,
           ),
-          // Löschen
-          IconButton(
-            icon: Icon(Icons.delete_outline,
-                color: theme.colorScheme.error),
-            tooltip: 'Löschen',
-            onPressed: isActing ? null : onDelete,
+          // Weiteres (Teilen, Löschen)
+          PopupMenuButton<_EntryAction>(
+            enabled: !isActing,
+            onSelected: (action) {
+              switch (action) {
+                case _EntryAction.exportMarkdown:
+                  onExportMarkdown();
+                case _EntryAction.delete:
+                  onDelete();
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: _EntryAction.exportMarkdown,
+                child: ListTile(
+                  leading: Icon(Icons.share_outlined),
+                  title: Text('Als Markdown teilen'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: _EntryAction.delete,
+                child: ListTile(
+                  leading: Icon(Icons.delete_outline),
+                  title: const Text('Löschen'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -236,11 +304,12 @@ class _EntryView extends ConsumerWidget {
             const SizedBox(height: 12),
           ],
 
-          // Body
+          // Body – [[Wikilinks]] werden als tappbare Spans gerendert.
           if (entry.body.isNotEmpty)
-            SelectableText(
-              entry.body,
+            WikilinkText(
+              text: entry.body,
               style: theme.textTheme.bodyLarge,
+              onWikilinkTap: onWikilinkTap,
             ),
 
           // Anhänge

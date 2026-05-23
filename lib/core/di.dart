@@ -27,6 +27,8 @@ import '../services/ai_enrich_service.dart';
 import '../services/ai_settings_service.dart';
 import '../services/attachment_service.dart';
 import '../services/backup_service.dart';
+import '../services/markdown_export_service.dart';
+import '../services/theme_service.dart';
 import '../services/url_metadata_service.dart';
 
 // ── Datenbank ──────────────────────────────────────────────────────────────
@@ -106,6 +108,23 @@ final aiSettingsServiceProvider = Provider<AiSettingsService>((ref) {
 final aiEnrichServiceProvider = Provider<AiEnrichService>((ref) {
   return AiEnrichService(ref.watch(aiSettingsServiceProvider));
 }, name: 'aiEnrichServiceProvider');
+
+/// MarkdownExportService: formatiert Einträge als Markdown und teilt sie.
+final markdownExportServiceProvider = Provider<MarkdownExportService>((ref) {
+  return MarkdownExportService();
+}, name: 'markdownExportServiceProvider');
+
+/// ThemeService: liest/schreibt Theme-Einstellung als JSON.
+final themeServiceProvider = Provider<ThemeService>((ref) {
+  return ThemeService();
+}, name: 'themeServiceProvider');
+
+/// Aktiver Theme-Modus. Initialwert wird in main() via ProviderScope.overrides
+/// aus der persistierten Einstellung geladen, um Flicker beim Start zu vermeiden.
+final themeModeProvider = StateProvider<String>(
+  (ref) => ThemeService.kSystem,
+  name: 'themeModeProvider',
+);
 
 // ── Workspace ─────────────────────────────────────────────────────────────
 
