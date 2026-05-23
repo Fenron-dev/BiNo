@@ -5,9 +5,10 @@
 // ABHÄNGIGKEITEN: BackupService, FilePicker, SystemNavigator.
 // PHASE: 2 – Datensicherung.
 
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -128,9 +129,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         actions: [
           FilledButton(
             onPressed: () {
-              Navigator.of(ctx).pop();
-              // App beenden – der Nutzer startet sie manuell neu.
-              SystemNavigator.pop();
+              // exit(0) beendet den gesamten Dart-Prozess sofort.
+              // SystemNavigator.pop() reicht nicht: Der Prozess kann im
+              // Hintergrund weiterlaufen und Drift greift auf die
+              // ausgetauschte DB mit dem alten Handle zu → Datenverlust.
+              exit(0);
             },
             child: const Text('App beenden'),
           ),

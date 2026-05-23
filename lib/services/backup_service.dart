@@ -58,10 +58,11 @@ class BackupService {
       final archive = Archive();
 
       // DB-Datei ins Archiv aufnehmen.
-      final dbFile = File(p.join(appDir.path, 'bino_notes.db'));
+      // WICHTIG: drift_flutter speichert als '.sqlite', nicht als '.db'.
+      final dbFile = File(p.join(appDir.path, 'bino_notes.sqlite'));
       if (await dbFile.exists()) {
         final bytes = await dbFile.readAsBytes();
-        archive.addFile(ArchiveFile('bino_notes.db', bytes.length, bytes));
+        archive.addFile(ArchiveFile('bino_notes.sqlite', bytes.length, bytes));
       }
 
       // Gesamten Anhänge-Ordner ins Archiv aufnehmen.
@@ -115,11 +116,11 @@ class BackupService {
       final zipBytes = await File(zipPath).readAsBytes();
       final archive = ZipDecoder().decodeBytes(zipBytes);
 
-      // Validierung: Backup muss eine bino_notes.db enthalten.
-      final hasDb = archive.any((f) => f.name == 'bino_notes.db');
+      // Validierung: Backup muss eine bino_notes.sqlite enthalten.
+      final hasDb = archive.any((f) => f.name == 'bino_notes.sqlite');
       if (!hasDb) {
         return const BackupError(
-          'Ungültige Backup-Datei: bino_notes.db nicht gefunden.',
+          'Ungültige Backup-Datei: bino_notes.sqlite nicht gefunden.',
         );
       }
 
@@ -128,7 +129,7 @@ class BackupService {
       // Alte WAL/SHM-Dateien löschen, damit SQLite die wiederhergestellte DB
       // ohne Journal-Konflikte beim nächsten Start öffnen kann.
       for (final suffix in ['-wal', '-shm']) {
-        final sideFile = File(p.join(appDir.path, 'bino_notes.db$suffix'));
+        final sideFile = File(p.join(appDir.path, 'bino_notes.sqlite$suffix'));
         if (await sideFile.exists()) await sideFile.delete();
       }
 
