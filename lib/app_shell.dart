@@ -78,13 +78,12 @@ class AppShell extends StatelessWidget {
       body: navigationShell,
 
       // GestureDetector wrappet den FAB für Long-Press-Unterstützung.
-      // WARUM GestureDetector statt FAB.onLongPress?
-      // FloatingActionButton hat in Flutter 3.x kein onLongPress-Parameter.
+      // WICHTIG: Kein 'tooltip' auf dem FAB – Tooltip registriert intern
+      // einen eigenen onLongPress-Handler, der den GestureDetector aussticht.
       floatingActionButton: GestureDetector(
         onLongPress: () => _openAudioCaptureSheet(context),
         child: FloatingActionButton(
           onPressed: () => _openCaptureSheet(context),
-          tooltip: 'Neue Notiz (Long-Press für Audio)',
           child: const Icon(Icons.add),
         ),
       ),
