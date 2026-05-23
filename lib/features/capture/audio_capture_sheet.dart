@@ -52,7 +52,12 @@ class _AudioCaptureSheetState extends ConsumerState<AudioCaptureSheet> {
   @override
   void initState() {
     super.initState();
-    _startRecording();
+    // addPostFrameCallback: Der Android-Berechtigungsdialog kann erst
+    // angezeigt werden, wenn das Widget vollständig in den Widget-Tree
+    // eingehängt ist. Ohne diesen Delay schlägt hasPermission() fehl.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _startRecording();
+    });
   }
 
   @override
@@ -67,12 +72,25 @@ class _AudioCaptureSheetState extends ConsumerState<AudioCaptureSheet> {
     final hasPermission = await _recorder.hasPermission();
     if (!hasPermission) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Mikrofon-Berechtigung wird benötigt.'),
+        // Dialog statt SnackBar: erklärt wo die Berechtigung aktiviert werden kann.
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Mikrofon-Berechtigung fehlt'),
+            content: const Text(
+              'BiNo benötigt Zugriff auf das Mikrofon.\n\n'
+              'Bitte erlaube den Zugriff unter:\n'
+              'Einstellungen → Apps → BiNo → Berechtigungen → Mikrofon',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('OK'),
+              ),
+            ],
           ),
         );
-        Navigator.of(context).pop();
+        if (mounted) Navigator.of(context).pop();
       }
       return;
     }
@@ -86,13 +104,18 @@ class _AudioCaptureSheetState extends ConsumerState<AudioCaptureSheet> {
       path: _recordingPath!,
     );
 
-    // STT parallel zur Aufnahme starten.
-    final sttService = ref.read(sttServiceProvider);
-    await sttService.startListening(
-      onResult: (text, isFinal) {
-        if (mounted) setState(() => _transcription = text);
-      },
-    );
+    // STT parallel zur Aufnahme starten. Fehler (z. B. kein Sprachpaket
+    // installiert) dürfen die Audio-Aufnahme nicht blockieren.
+    try {
+      final sttService = ref.read(sttServiceProvider);
+      await sttService.startListening(
+        onResult: (text, isFinal) {
+          if (mounted) setState(() => _transcription = text);
+        },
+      );
+    } catch (_) {
+      // STT nicht verfügbar – Aufnahme läuft ohne Transkription weiter.
+    }
 
     setState(() => _isRecording = true);
 

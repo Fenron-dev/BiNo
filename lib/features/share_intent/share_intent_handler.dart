@@ -59,12 +59,25 @@ class _ShareIntentHandlerState extends ConsumerState<ShareIntentHandler> {
           case SharedMediaType.url:
             final text = file.path;
             final isUrl = text.startsWith('http://') || text.startsWith('https://');
-            await entryRepo.createEntry(
-              body: text,
-              type: isUrl ? EntryType.link : EntryType.text,
-              sourceUrl: isUrl ? text : null,
-              sourceApp: 'share_intent',
-            );
+            if (isUrl) {
+              // Metadaten laden damit im Feed Titel + Beschreibung statt
+              // nur der rohen URL erscheinen.
+              final urlService = ref.read(urlMetadataServiceProvider);
+              final meta = await urlService.fetch(text);
+              await entryRepo.createEntry(
+                title: meta?.title,
+                body: meta?.description ?? text,
+                type: EntryType.link,
+                sourceUrl: text,
+                sourceApp: 'share_intent',
+              );
+            } else {
+              await entryRepo.createEntry(
+                body: text,
+                type: EntryType.text,
+                sourceApp: 'share_intent',
+              );
+            }
 
           case SharedMediaType.image:
             final entryId = await entryRepo.createEntry(
