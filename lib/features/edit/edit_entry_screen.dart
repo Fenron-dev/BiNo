@@ -9,7 +9,7 @@
 
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Container;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
@@ -17,8 +17,10 @@ import 'package:uuid/uuid.dart';
 import 'package:drift/drift.dart' show Value;
 
 import '../../core/di.dart';
-import '../../data/db/database.dart' hide Container;
+import '../../data/db/database.dart';
+import '../../data/db/daos/container_dao.dart';
 import '../../data/db/tables/property_definitions.dart';
+import '../containers/container_form_sheet.dart';
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 
@@ -207,6 +209,13 @@ class _EditView extends ConsumerWidget {
           const Divider(),
           const SizedBox(height: 8),
 
+          // ── Container-Zuweisung (Projekte / Bereiche) ──────────────────────
+          _ContainersSection(entryId: entryId),
+
+          const SizedBox(height: 16),
+          const Divider(),
+          const SizedBox(height: 8),
+
           // ── Properties ─────────────────────────────────────────────────────
           _PropertiesSection(
             entryId: entryId,
@@ -296,6 +305,204 @@ class _NotesSectionState extends State<_NotesSection> {
     );
   }
 }
+
+// ── Container-Zuweisung ───────────────────────────────────────────────────────
+
+/// Zeigt die zugewiesenen Projekte/Bereiche eines Eintrags und erlaubt
+/// das Hinzufügen/Entfernen via Dialog.
+class _ContainersSection extends ConsumerWidget {
+  final String entryId;
+
+  const _ContainersSection({required this.entryId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final assignedAsync = ref.watch(_assignedContainersProvider(entryId));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.folder_outlined,
+              size: 16,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Projekte & Bereiche',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        assignedAsync.when(
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
+          data: (assigned) => Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              ...assigned.map(
+                (c) => Chip(
+                  avatar: Icon(
+                    containerIconData(c.icon),
+                    size: 16,
+                    color: hexToColor(c.color),
+                  ),
+                  label: Text(c.name),
+                  deleteIcon: const Icon(Icons.close, size: 14),
+                  onDeleted: () => ref
+                      .read(containerDaoProvider)
+                      .removeEntry(entryId, c.id),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+              ActionChip(
+                avatar: const Icon(Icons.add, size: 16),
+                label: const Text('Hinzufügen'),
+                onPressed: () =>
+                    _showPicker(context, ref, assigned),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showPicker(
+    BuildContext context,
+    WidgetRef ref,
+    List<Container> assigned,
+  ) async {
+    final dao = ref.read(containerDaoProvider);
+    final allProjects = await dao.getContainersByKind('project');
+    final allAreas = await dao.getContainersByKind('area');
+    final all = [...allProjects, ...allAreas];
+    if (all.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Erstelle zuerst ein Projekt oder einen Bereich.'),
+          ),
+        );
+      }
+      return;
+    }
+    if (!context.mounted) return;
+
+    final assignedIds = assigned.map((c) => c.id).toSet();
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => _ContainerPickerDialog(
+        containers: all,
+        assignedIds: assignedIds,
+        entryId: entryId,
+        dao: dao,
+      ),
+    );
+  }
+}
+
+class _ContainerPickerDialog extends StatefulWidget {
+  final List<Container> containers;
+  final Set<String> assignedIds;
+  final String entryId;
+  final ContainerDao dao;
+
+  const _ContainerPickerDialog({
+    required this.containers,
+    required this.assignedIds,
+    required this.entryId,
+    required this.dao,
+  });
+
+  @override
+  State<_ContainerPickerDialog> createState() => _ContainerPickerDialogState();
+}
+
+class _ContainerPickerDialogState extends State<_ContainerPickerDialog> {
+  late final Set<String> _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = Set.from(widget.assignedIds);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Zu Container hinzufügen'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: ListView(
+          shrinkWrap: true,
+          children: widget.containers.map((c) {
+            final isChecked = _selected.contains(c.id);
+            return CheckboxListTile(
+              value: isChecked,
+              secondary: Icon(
+                containerIconData(c.icon),
+                color: hexToColor(c.color),
+              ),
+              title: Text(c.name),
+              subtitle: Text(
+                c.kind == 'project' ? 'Projekt' : 'Bereich',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              dense: true,
+              onChanged: (checked) =>
+                  setState(() {
+                    if (checked == true) {
+                      _selected.add(c.id);
+                    } else {
+                      _selected.remove(c.id);
+                    }
+                  }),
+            );
+          }).toList(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Abbrechen'),
+        ),
+        FilledButton(
+          onPressed: () async {
+            // Neu hinzugefügte zuweisen, entfernte wieder entfernen.
+            for (final c in widget.containers) {
+              if (_selected.contains(c.id) &&
+                  !widget.assignedIds.contains(c.id)) {
+                await widget.dao.assignEntry(widget.entryId, c.id);
+              } else if (!_selected.contains(c.id) &&
+                  widget.assignedIds.contains(c.id)) {
+                await widget.dao.removeEntry(widget.entryId, c.id);
+              }
+            }
+            if (context.mounted) Navigator.of(context).pop();
+          },
+          child: const Text('Übernehmen'),
+        ),
+      ],
+    );
+  }
+}
+
+// Provider für zugewiesene Container eines Eintrags (reaktiv).
+final _assignedContainersProvider = StreamProvider.autoDispose
+    .family<List<Container>, String>((ref, entryId) {
+  return ref.watch(containerDaoProvider).watchContainersForEntry(entryId);
+});
 
 // ── Properties-Sektion ────────────────────────────────────────────────────────
 
@@ -510,29 +717,31 @@ class _PropertyField extends ConsumerWidget {
             }
           },
           borderRadius: BorderRadius.circular(8),
-          child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: DecoratedBox(
             decoration: BoxDecoration(
               color: theme.colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.calendar_today_outlined,
-                    size: 16,
-                    color: theme.colorScheme.onSurfaceVariant),
-                const SizedBox(width: 6),
-                Text(
-                  dateStr ?? 'Datum wählen...',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: dateStr != null
-                        ? null
-                        : theme.colorScheme.onSurfaceVariant,
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.calendar_today_outlined,
+                      size: 16,
+                      color: theme.colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 6),
+                  Text(
+                    dateStr ?? 'Datum wählen...',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: dateStr != null
+                          ? null
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );

@@ -17,6 +17,7 @@ import '../features/areas/areas_screen.dart';
 import '../features/entry_detail/entry_detail_screen.dart';
 import '../features/edit/edit_entry_screen.dart';
 import '../features/settings/settings_screen.dart';
+import '../features/containers/container_detail_screen.dart';
 
 /// GoRouter als Riverpod-Provider.
 ///
@@ -36,6 +37,24 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.settings,
         builder: (context, state) => const SettingsScreen(),
+      ),
+
+      // Container-Detail: außerhalb der Shell → volle Bildschirmbreite ohne BottomBar.
+      // Wird aus Projekte- und Bereiche-Tab heraus aufgerufen.
+      GoRoute(
+        path: '/container/detail/:id',
+        builder: (context, state) {
+          // Felder als Map übergeben um den Container-Namenskonflikt
+          // (Drift vs. Flutter) in der Router-Datei zu vermeiden.
+          final extra = state.extra as Map<String, String>;
+          return ContainerDetailScreen(
+            containerId: extra['id']!,
+            containerName: extra['name']!,
+            containerIcon: extra['icon']!,
+            containerColor: extra['color']!,
+            containerKind: extra['kind']!,
+          );
+        },
       ),
 
       // StatefulShellRoute: Hält für jeden Tab einen eigenen NavigatorKey.

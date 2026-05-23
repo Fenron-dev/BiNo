@@ -38,4 +38,8 @@ abstract class AppRoutes {
   // Eintrag-Detail: Subroute innerhalb des Feed-Branches.
   // Vollpfad: /feed/detail/:id
   static String entryDetail(String id) => '/feed/detail/$id';
+
+  // Container-Detail: erreichbar aus Projekte- und Bereiche-Branch.
+  // Vollpfad: /container/detail/:id
+  static String containerDetail(String id) => '/container/detail/$id';
 }

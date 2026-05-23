@@ -20,10 +20,12 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'dart:convert';
 
+import '../../core/constants.dart';
 import '../../core/di.dart';
 // 'Container' aus database.dart ausblenden – kollidiert mit Flutter's Container-Widget.
 import '../../data/db/database.dart' hide Container;
 import '../../data/db/tables/property_definitions.dart';
+import '../containers/container_form_sheet.dart';
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 
@@ -54,6 +56,14 @@ final _detailPropertiesProvider = StreamProvider.autoDispose
 final _detailDefinitionsProvider = StreamProvider.autoDispose
     .family<List<PropertyDefinition>, String>((ref, workspaceId) {
   return ref.watch(propertyDaoProvider).watchDefinitionsForWorkspace(workspaceId);
+});
+
+/// Beobachtet die Container, denen ein Eintrag zugewiesen ist.
+/// List<dynamic> wird genutzt um den Drift-Container-Namenskonflikt mit
+/// Flutter's Container-Widget in dieser Datei zu umgehen.
+final _entryContainersProvider = StreamProvider.autoDispose
+    .family<List<dynamic>, String>((ref, entryId) {
+  return ref.watch(containerDaoProvider).watchContainersForEntry(entryId);
 });
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -168,6 +178,7 @@ class _EntryView extends ConsumerWidget {
     final workspaceId = ref.watch(activeWorkspaceProvider);
     final propsAsync = ref.watch(_detailPropertiesProvider(entry.id));
     final defsAsync = ref.watch(_detailDefinitionsProvider(workspaceId));
+    final containersAsync = ref.watch(_entryContainersProvider(entry.id));
 
     return Scaffold(
       appBar: AppBar(
@@ -294,6 +305,56 @@ class _EntryView extends ConsumerWidget {
                     ],
                   );
                 },
+              );
+            },
+          ),
+
+          // Container-Badges (Projekte / Bereiche)
+          containersAsync.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (containers) {
+              if (containers.isEmpty) return const SizedBox.shrink();
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: containers.map((c) {
+                      // c ist dynamisch (Drift Container, aber Container-Widget ist
+                      // in dieser Datei versteckt) → Property-Zugriff via dynamic dispatch.
+                      final id = c.id as String;
+                      final name = c.name as String;
+                      final icon = c.icon as String;
+                      final color = c.color as String;
+                      final kind = c.kind as String;
+                      return ActionChip(
+                        avatar: Icon(
+                          containerIconData(icon),
+                          size: 16,
+                          color: hexToColor(color),
+                        ),
+                        label: Text(name),
+                        onPressed: () => context.push(
+                          AppRoutes.containerDetail(id),
+                          extra: {
+                            'id': id,
+                            'name': name,
+                            'icon': icon,
+                            'color': color,
+                            'kind': kind,
+                          },
+                        ),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                      );
+                    }).toList(),
+                  ),
+                ],
               );
             },
           ),
