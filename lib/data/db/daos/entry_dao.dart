@@ -143,6 +143,19 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
         ),
       );
 
+  /// Gibt alle Einträge zurück, die einen nicht-leeren Titel haben.
+  /// Wird im Wikilink-Picker verwendet, damit der Nutzer per Titel verlinken kann.
+  Future<List<Entry>> getEntriesWithTitles(String workspaceId) =>
+      (select(entries)
+            ..where(
+              (t) =>
+                  t.workspaceId.equals(workspaceId) &
+                  t.title.isNotNull() &
+                  t.title.isNotValue(''),
+            )
+            ..orderBy([(t) => OrderingTerm(expression: t.title)]))
+          .get();
+
   /// Gibt alle Einträge zurück, deren createdAt im Zeitfenster [start, end) liegt.
   /// Wird vom onThisDayProvider genutzt, um Einträge vom gleichen Datum
   /// in vergangenen Jahren zu laden.

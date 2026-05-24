@@ -1,20 +1,22 @@
 // Datei: lib/services/markdown_export_service.dart
 //
 // ZWECK: Formatiert einen Eintrag als Markdown-Text (YAML-Frontmatter + Body)
-//        und öffnet das System-Share-Sheet zum Weitergeben.
-// ABHÄNGIGKEITEN: share_plus, intl, database.dart.
+//        und öffnet das System-Share-Sheet als .md-Datei.
+// ABHÄNGIGKEITEN: share_plus, intl, path_provider, path, database.dart.
 // PHASE: 5 – Export.
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../data/db/database.dart';
 
 class MarkdownExportService {
-  /// Formatiert [entry] mit zugehörigen Tags, Properties und Anhängen
-  /// als Markdown-Text und öffnet das System-Share-Sheet.
+  /// Formatiert [entry] als Markdown und öffnet das Share-Sheet mit einer .md-Datei.
   Future<void> shareEntry({
     required Entry entry,
     required List<Tag> tags,
@@ -29,7 +31,25 @@ class MarkdownExportService {
       definitions: definitions,
       attachments: attachments,
     );
-    await Share.share(text, subject: entry.title ?? 'BiNo-Eintrag');
+
+    // Dateiname aus Titel ableiten und bereinigen.
+    final rawName = (entry.title?.isNotEmpty == true)
+        ? entry.title!
+        : 'BiNo_Eintrag';
+    final safeName = rawName
+        .replaceAll(RegExp(r'[^\w\- ]'), '')
+        .replaceAll(' ', '_');
+    final trimmed = safeName.length > 40 ? safeName.substring(0, 40) : safeName;
+    final filename = '${trimmed.isEmpty ? 'BiNo_Eintrag' : trimmed}.md';
+
+    final tmpDir = await getTemporaryDirectory();
+    final file = File(p.join(tmpDir.path, filename));
+    await file.writeAsString(text);
+
+    await Share.shareXFiles(
+      [XFile(file.path, mimeType: 'text/markdown', name: filename)],
+      subject: entry.title ?? 'BiNo-Eintrag',
+    );
   }
 
   String _format({

@@ -36,12 +36,16 @@ class CaptureState {
   /// Fehlermeldung. Null wenn kein Fehler.
   final String? error;
 
+  /// Manuell gesetzter Typ-Override. Null = Auto-Erkennung.
+  final EntryType? typeOverride;
+
   const CaptureState({
     this.isSaving = false,
     this.pendingImages = const [],
     this.detectedUrl,
     this.isFetchingUrl = false,
     this.error,
+    this.typeOverride,
   });
 
   CaptureState copyWith({
@@ -51,6 +55,8 @@ class CaptureState {
     bool clearUrl = false,
     bool? isFetchingUrl,
     String? error,
+    EntryType? typeOverride,
+    bool clearTypeOverride = false,
   }) {
     return CaptureState(
       isSaving: isSaving ?? this.isSaving,
@@ -58,6 +64,8 @@ class CaptureState {
       detectedUrl: clearUrl ? null : (detectedUrl ?? this.detectedUrl),
       isFetchingUrl: isFetchingUrl ?? this.isFetchingUrl,
       error: error,
+      typeOverride:
+          clearTypeOverride ? null : (typeOverride ?? this.typeOverride),
     );
   }
 }
@@ -79,6 +87,16 @@ class CaptureController extends StateNotifier<CaptureState> {
         _urlService = urlService,
         _picker = picker ?? ImagePicker(),
         super(const CaptureState());
+
+  // ── Typ-Override ──────────────────────────────────────────────────────
+
+  /// Setzt den Typ manuell. null = Auto-Erkennung.
+  void setTypeOverride(EntryType? type) {
+    state = state.copyWith(
+      typeOverride: type,
+      clearTypeOverride: type == null,
+    );
+  }
 
   // ── Bild-Auswahl ──────────────────────────────────────────────────────
 
@@ -195,8 +213,10 @@ class CaptureController extends StateNotifier<CaptureState> {
     }
   }
 
-  /// Bestimmt den Eintragstyp basierend auf Inhalt.
+  /// Bestimmt den Eintragstyp. Manueller Override hat Vorrang vor Auto-Erkennung.
   EntryType _determineType(String body) {
+    if (state.typeOverride != null) return state.typeOverride!;
+
     final hasImages = state.pendingImages.isNotEmpty;
     final hasUrl = state.detectedUrl != null;
     final hasText = body.trim().isNotEmpty;

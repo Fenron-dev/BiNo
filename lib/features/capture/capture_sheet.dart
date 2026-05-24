@@ -7,17 +7,16 @@
 // PHASE: 2 – Text + Bilder + URL-Vorschau. Action-Leiste über dem Textfeld.
 
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/di.dart';
+import '../../data/db/tables/entries.dart';
 import '../../services/url_metadata_service.dart';
 import 'capture_controller.dart';
 
 /// Quick-Capture Bottom-Sheet.
-///
-/// WARUM ConsumerStatefulWidget?
-/// TextEditingController muss in dispose() freigegeben werden, und wir
-/// brauchen Zugriff auf den captureControllerProvider.
 class CaptureSheet extends ConsumerStatefulWidget {
   const CaptureSheet({super.key});
 
@@ -27,6 +26,7 @@ class CaptureSheet extends ConsumerStatefulWidget {
 
 class _CaptureSheetState extends ConsumerState<CaptureSheet> {
   final TextEditingController _textController = TextEditingController();
+  String _prevBody = '';
 
   @override
   void dispose() {
@@ -37,11 +37,42 @@ class _CaptureSheetState extends ConsumerState<CaptureSheet> {
   Future<void> _handleSend(BuildContext context) async {
     final controller = ref.read(captureControllerProvider.notifier);
     final success = await controller.saveEntry(_textController.text);
+    if (success && context.mounted) Navigator.of(context).pop();
+  }
 
-    // context.mounted verhindert Zugriff nach async-Lücke falls Widget entfernt.
-    if (success && context.mounted) {
-      Navigator.of(context).pop();
-    }
+  Future<void> _insertWikilink() async {
+    final workspaceId = ref.read(activeWorkspaceProvider);
+    final entries =
+        await ref.read(entryDaoProvider).getEntriesWithTitles(workspaceId);
+
+    if (!mounted) return;
+
+    final title = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => _WikilinkPickerSheet(entries: entries),
+    );
+
+    if (title == null || !mounted) return;
+
+    final pos = _textController.selection.isValid
+        ? _textController.selection.baseOffset
+        : _textController.text.length;
+    final text = _textController.text;
+    final insert = '[[$title]]';
+    final newText = text.substring(0, pos) + insert + text.substring(pos);
+    final newOffset = pos + insert.length;
+
+    _textController.value = _textController.value.copyWith(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newOffset),
+    );
+    _prevBody = newText;
+    ref.read(captureControllerProvider.notifier).onBodyChanged(newText);
   }
 
   @override
@@ -49,10 +80,6 @@ class _CaptureSheetState extends ConsumerState<CaptureSheet> {
     final captureState = ref.watch(captureControllerProvider);
     final controller = ref.read(captureControllerProvider.notifier);
     final theme = Theme.of(context);
-
-    // MediaQuery.viewInsets.bottom: Höhe der Bildschirmtastatur.
-    // Padding verschiebt das Sheet nach oben, sodass das Textfeld sichtbar bleibt.
-    // Funktioniert zusammen mit isScrollControlled: true im showModalBottomSheet-Aufruf.
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
 
     return Padding(
@@ -62,7 +89,6 @@ class _CaptureSheetState extends ConsumerState<CaptureSheet> {
         children: [
           const _SheetHandle(),
 
-          // Fehlermeldung – nur sichtbar wenn ein Fehler vorliegt.
           if (captureState.error != null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -72,7 +98,6 @@ class _CaptureSheetState extends ConsumerState<CaptureSheet> {
               ),
             ),
 
-          // Bild-Vorschaustreifen – nur wenn Bilder ausgewählt sind.
           if (captureState.pendingImages.isNotEmpty)
             _ImagePreviewStrip(
               images: captureState.pendingImages
@@ -81,32 +106,35 @@ class _CaptureSheetState extends ConsumerState<CaptureSheet> {
               onRemove: (index) => controller.removePendingImage(index),
             ),
 
-          // URL-Vorschaukarte – nur wenn eine URL erkannt wurde.
           if (captureState.isFetchingUrl)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  SizedBox(
+              child: Row(children: [
+                SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  SizedBox(width: 8),
-                  Text('Link wird geladen…'),
-                ],
-              ),
+                    child: CircularProgressIndicator(strokeWidth: 2)),
+                SizedBox(width: 8),
+                Text('Link wird geladen…'),
+              ]),
             )
           else if (captureState.detectedUrl != null)
             _UrlPreviewCard(metadata: captureState.detectedUrl!),
 
-          // Horizontale Action-Leiste: Foto, Kamera, (Audio via Long-Press).
+          // Typ-Chips (Typ-Override)
+          _TypeChips(
+            selected: captureState.typeOverride,
+            onChanged: (t) => controller.setTypeOverride(t),
+          ),
+
+          // Action-Leiste
           _ActionBar(
             onGallery: () => controller.pickImageFromGallery(),
             onCamera: () => controller.pickImageFromCamera(),
+            onWikilink: _insertWikilink,
           ),
 
-          // Eingabezeile: Textfeld + Senden-Button.
+          // Eingabezeile
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 8, 16),
             child: Row(
@@ -115,16 +143,31 @@ class _CaptureSheetState extends ConsumerState<CaptureSheet> {
                 Expanded(
                   child: TextField(
                     controller: _textController,
-                    // autofocus: Tastatur öffnet sich sofort beim Sheet-Öffnen.
                     autofocus: true,
                     maxLines: null,
                     minLines: 1,
-                    // TextInputAction.newline: Enter fügt Zeilenumbruch ein.
                     textInputAction: TextInputAction.newline,
                     keyboardType: TextInputType.multiline,
-                    onChanged: (text) => controller.onBodyChanged(text),
+                    onChanged: (text) {
+                      // Auto-close [[ → [[]]
+                      if (text.length > _prevBody.length &&
+                          text.endsWith('[[')) {
+                        final newText = '$text]]';
+                        _textController.value =
+                            _textController.value.copyWith(
+                          text: newText,
+                          selection: TextSelection.collapsed(
+                              offset: text.length),
+                        );
+                        _prevBody = newText;
+                        controller.onBodyChanged(newText);
+                        return;
+                      }
+                      _prevBody = text;
+                      controller.onBodyChanged(text);
+                    },
                     decoration: InputDecoration(
-                      hintText: 'Notiz eingeben…',
+                      hintText: 'Notiz eingeben… [[Wikilink]] #tag',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide.none,
@@ -132,9 +175,7 @@ class _CaptureSheetState extends ConsumerState<CaptureSheet> {
                       filled: true,
                       fillColor: theme.colorScheme.surfaceContainerHighest,
                       contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
+                          horizontal: 16, vertical: 12),
                     ),
                   ),
                 ),
@@ -152,9 +193,59 @@ class _CaptureSheetState extends ConsumerState<CaptureSheet> {
   }
 }
 
+// ── Typ-Chips ─────────────────────────────────────────────────────────────────
+
+class _TypeChips extends StatelessWidget {
+  final EntryType? selected;
+  final void Function(EntryType?) onChanged;
+
+  const _TypeChips({required this.selected, required this.onChanged});
+
+  static const _types = <(EntryType, String, IconData)>[
+    (EntryType.text, 'Text', Icons.text_fields_outlined),
+    (EntryType.link, 'Link', Icons.link_outlined),
+    (EntryType.image, 'Bild', Icons.image_outlined),
+    (EntryType.audio, 'Audio', Icons.mic_none_outlined),
+    (EntryType.mixed, 'Gemischt', Icons.layers_outlined),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+      child: Row(
+        children: [
+          // "Auto"-Chip
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: FilterChip(
+              label: const Text('Auto'),
+              selected: selected == null,
+              visualDensity: VisualDensity.compact,
+              onSelected: (_) => onChanged(null),
+            ),
+          ),
+          ..._types.map(
+            (t) => Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: FilterChip(
+                avatar: Icon(t.$3, size: 14),
+                label: Text(t.$2),
+                selected: selected == t.$1,
+                visualDensity: VisualDensity.compact,
+                onSelected: (v) => onChanged(v ? t.$1 : null),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Hilfsdwidgets ──────────────────────────────────────────────────────────────
 
-/// Drag-Handle oben am Sheet (Material 3 Standard).
 class _SheetHandle extends StatelessWidget {
   const _SheetHandle();
 
@@ -174,12 +265,16 @@ class _SheetHandle extends StatelessWidget {
   }
 }
 
-/// Horizontale Action-Leiste mit Foto- und Kamera-Schaltflächen.
 class _ActionBar extends StatelessWidget {
   final VoidCallback onGallery;
   final VoidCallback onCamera;
+  final VoidCallback onWikilink;
 
-  const _ActionBar({required this.onGallery, required this.onCamera});
+  const _ActionBar({
+    required this.onGallery,
+    required this.onCamera,
+    required this.onWikilink,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -197,13 +292,17 @@ class _ActionBar extends StatelessWidget {
             label: 'Kamera',
             onTap: onCamera,
           ),
+          _ActionButton(
+            icon: Icons.link,
+            label: '[[Link]]',
+            onTap: onWikilink,
+          ),
         ],
       ),
     );
   }
 }
 
-/// Einzelne Action-Schaltfläche in der Leiste.
 class _ActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -230,9 +329,8 @@ class _ActionButton extends StatelessWidget {
             const SizedBox(width: 6),
             Text(
               label,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.colorScheme.primary,
-              ),
+              style: theme.textTheme.labelMedium
+                  ?.copyWith(color: theme.colorScheme.primary),
             ),
           ],
         ),
@@ -241,7 +339,6 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
-/// Horizontaler Streifen mit Bildvorschau-Thumbnails.
 class _ImagePreviewStrip extends StatelessWidget {
   final List<File> images;
   final void Function(int index) onRemove;
@@ -263,14 +360,9 @@ class _ImagePreviewStrip extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.file(
-                    images[index],
-                    width: 64,
-                    height: 64,
-                    fit: BoxFit.cover,
-                  ),
+                  child: Image.file(images[index],
+                      width: 64, height: 64, fit: BoxFit.cover),
                 ),
-                // Löschen-Button oben rechts auf dem Thumbnail.
                 Positioned(
                   top: 0,
                   right: 0,
@@ -283,11 +375,8 @@ class _ImagePreviewStrip extends StatelessWidget {
                         color: Colors.black54,
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(
-                        Icons.close,
-                        size: 14,
-                        color: Colors.white,
-                      ),
+                      child: const Icon(Icons.close,
+                          size: 14, color: Colors.white),
                     ),
                   ),
                 ),
@@ -300,7 +389,6 @@ class _ImagePreviewStrip extends StatelessWidget {
   }
 }
 
-/// Vorschaukarte für eine erkannte URL mit Open-Graph-Daten.
 class _UrlPreviewCard extends StatelessWidget {
   final UrlMetadata metadata;
 
@@ -309,28 +397,20 @@ class _UrlPreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Container(
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: theme.colorScheme.outlineVariant,
-          ),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
         ),
         clipBehavior: Clip.hardEdge,
         child: IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Farbiger linker Streifen als visueller Anker für Links.
-              Container(
-                width: 4,
-                color: theme.colorScheme.primary,
-              ),
-              // Vorschaubild – nur wenn vorhanden.
+              Container(width: 4, color: theme.colorScheme.primary),
               if (metadata.imageUrl != null)
                 Image.network(
                   metadata.imageUrl!,
@@ -339,7 +419,6 @@ class _UrlPreviewCard extends StatelessWidget {
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                 ),
-              // Titel und Domain.
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(10),
@@ -349,9 +428,8 @@ class _UrlPreviewCard extends StatelessWidget {
                     children: [
                       Text(
                         metadata.domain,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.primary,
-                        ),
+                        style: theme.textTheme.labelSmall
+                            ?.copyWith(color: theme.colorScheme.primary),
                       ),
                       if (metadata.title != null) ...[
                         const SizedBox(height: 2),
@@ -359,9 +437,8 @@ class _UrlPreviewCard extends StatelessWidget {
                           metadata.title!,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(fontWeight: FontWeight.w600),
                         ),
                       ],
                     ],
@@ -376,7 +453,6 @@ class _UrlPreviewCard extends StatelessWidget {
   }
 }
 
-/// Runder Senden-Button – deaktiviert während des Speicherns.
 class _SendButton extends StatelessWidget {
   final bool isSaving;
   final VoidCallback? onPressed;
@@ -398,9 +474,103 @@ class _SendButton extends StatelessWidget {
             ? const SizedBox(
                 width: 20,
                 height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
+                child: CircularProgressIndicator(strokeWidth: 2))
             : const Icon(Icons.send),
+      ),
+    );
+  }
+}
+
+// ── Wikilink-Picker ───────────────────────────────────────────────────────────
+
+class _WikilinkPickerSheet extends StatefulWidget {
+  final List<dynamic> entries; // Entry-Objekte mit id, title, body
+
+  const _WikilinkPickerSheet({required this.entries});
+
+  @override
+  State<_WikilinkPickerSheet> createState() => _WikilinkPickerSheetState();
+}
+
+class _WikilinkPickerSheetState extends State<_WikilinkPickerSheet> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    final filtered = widget.entries.where((e) {
+      final title = e.title as String? ?? '';
+      return _query.isEmpty ||
+          title.toLowerCase().contains(_query.toLowerCase());
+    }).toList();
+
+    return Padding(
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(
+              children: [
+                Icon(Icons.link, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text('Wikilink einfügen',
+                    style: theme.textTheme.titleMedium),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: _searchCtrl,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'Titel suchen oder neu eingeben…',
+                prefixIcon: Icon(Icons.search),
+              ),
+              onChanged: (v) => setState(() => _query = v),
+            ),
+          ),
+          // Option: eingetippten Begriff als neuen Platzhalter einfügen
+          if (_query.isNotEmpty &&
+              !filtered.any(
+                  (e) => (e.title as String?)?.toLowerCase() ==
+                      _query.toLowerCase()))
+            ListTile(
+              leading: const Icon(Icons.add_circle_outline),
+              title: Text('„$_query" als neuen Wikilink einfügen'),
+              onTap: () => Navigator.of(context).pop(_query),
+            ),
+          // Bestehende Einträge
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.4,
+            ),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: filtered.length,
+              itemBuilder: (_, i) {
+                final title = filtered[i].title as String;
+                return ListTile(
+                  leading: const Icon(Icons.article_outlined),
+                  title: Text(title),
+                  onTap: () => Navigator.of(context).pop(title),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }

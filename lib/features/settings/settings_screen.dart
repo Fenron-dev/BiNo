@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/di.dart';
+import '../../services/ai_enrich_service.dart';
 import '../../services/ai_settings_service.dart';
 import '../../services/backup_service.dart';
 import '../../services/theme_service.dart';
@@ -30,9 +31,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isImporting = false;
 
   // ── KI-Einstellungen ──────────────────────────────────────────────────────
-  final _apiKeyCtrl = TextEditingController();
-  String _selectedModel = kAiModels.first.$1;
-  bool _obscureKey = true;
+  String _provider = kProviderAnthropic;
+  final _anthKeyCtrl = TextEditingController();
+  String _anthModel = kAiModels.first.$1;
+  bool _obscureAnthKey = true;
+
+  final _orKeyCtrl = TextEditingController();
+  String _orModel = '';
+  bool _obscureOrKey = true;
+  List<OpenRouterModel> _orModels = [];
+  bool _isLoadingOrModels = false;
+
   bool _isSavingAi = false;
 
   @override
@@ -43,27 +52,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   void dispose() {
-    _apiKeyCtrl.dispose();
+    _anthKeyCtrl.dispose();
+    _orKeyCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _loadAiSettings() async {
-    final service = ref.read(aiSettingsServiceProvider);
-    final key = await service.getApiKey();
-    final model = await service.getModel();
-    if (mounted) {
-      setState(() {
-        _apiKeyCtrl.text = key ?? '';
-        _selectedModel = model;
-      });
-    }
+    final s = ref.read(aiSettingsServiceProvider);
+    final provider = await s.getProvider();
+    final anthKey = await s.getAnthropicKey();
+    final anthModel = await s.getAnthropicModel();
+    final orKey = await s.getOpenRouterKey();
+    final orModel = await s.getOpenRouterModel();
+    if (!mounted) return;
+    setState(() {
+      _provider = provider;
+      _anthKeyCtrl.text = anthKey ?? '';
+      _anthModel = anthModel;
+      _orKeyCtrl.text = orKey ?? '';
+      _orModel = orModel;
+    });
+    if (provider == kProviderOpenRouter) _loadOrModels();
+  }
+
+  Future<void> _loadOrModels() async {
+    setState(() => _isLoadingOrModels = true);
+    final models = await AiEnrichService.fetchOpenRouterModels();
+    if (!mounted) return;
+    setState(() {
+      _orModels = models;
+      _isLoadingOrModels = false;
+      // Falls gespeichertes Modell nicht in der Liste → behalten.
+      if (models.isNotEmpty &&
+          models.every((m) => m.id != _orModel)) {
+        _orModel = models.first.id;
+      }
+    });
   }
 
   Future<void> _saveAiSettings() async {
     setState(() => _isSavingAi = true);
     await ref.read(aiSettingsServiceProvider).save(
-          apiKey: _apiKeyCtrl.text,
-          model: _selectedModel,
+          provider: _provider,
+          anthropicKey: _anthKeyCtrl.text,
+          anthropicModel: _anthModel,
+          openRouterKey: _orKeyCtrl.text,
+          openRouterModel: _orModel,
         );
     if (!mounted) return;
     setState(() => _isSavingAi = false);
@@ -254,53 +288,164 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           // ── KI (AI-Anreicherung) ───────────────────────────────────────
           _SectionHeader(title: 'KI – Anreicherung'),
 
+          // Provider-Auswahl
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: TextField(
-              controller: _apiKeyCtrl,
-              obscureText: _obscureKey,
-              decoration: InputDecoration(
-                labelText: 'Anthropic API-Key',
-                hintText: 'sk-ant-...',
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscureKey
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                  ),
-                  onPressed: () =>
-                      setState(() => _obscureKey = !_obscureKey),
+            child: SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                  value: kProviderAnthropic,
+                  label: Text('Anthropic'),
+                  icon: Icon(Icons.hub_outlined),
                 ),
-              ),
-            ),
-          ),
-
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: DropdownButtonFormField<String>(
-              // ignore: deprecated_member_use
-              value: _selectedModel,
-              decoration: const InputDecoration(
-                labelText: 'Modell',
-                border: OutlineInputBorder(),
-              ),
-              items: kAiModels
-                  .map(
-                    (m) => DropdownMenuItem(
-                      value: m.$1,
-                      child: Text(m.$2),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (v) {
-                if (v != null) setState(() => _selectedModel = v);
+                ButtonSegment(
+                  value: kProviderOpenRouter,
+                  label: Text('OpenRouter'),
+                  icon: Icon(Icons.share_outlined),
+                ),
+              ],
+              selected: {_provider},
+              onSelectionChanged: (s) {
+                setState(() => _provider = s.first);
+                if (s.first == kProviderOpenRouter && _orModels.isEmpty) {
+                  _loadOrModels();
+                }
               },
             ),
           ),
 
+          // ── Anthropic ──────────────────────────────────────────────────
+          if (_provider == kProviderAnthropic) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: TextField(
+                controller: _anthKeyCtrl,
+                obscureText: _obscureAnthKey,
+                decoration: InputDecoration(
+                  labelText: 'Anthropic API-Key',
+                  hintText: 'sk-ant-...',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: Icon(_obscureAnthKey
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined),
+                    onPressed: () =>
+                        setState(() => _obscureAnthKey = !_obscureAnthKey),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: DropdownButtonFormField<String>(
+                initialValue: _anthModel,
+                decoration: const InputDecoration(
+                  labelText: 'Modell',
+                  border: OutlineInputBorder(),
+                ),
+                items: kAiModels
+                    .map((m) => DropdownMenuItem(
+                          value: m.$1,
+                          child: Text(m.$2),
+                        ))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) setState(() => _anthModel = v);
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+              child: Text(
+                'API-Key unter console.anthropic.com erstellen '
+                '(separates Konto, nicht das claude.ai-Abo).',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color:
+                          Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
+          ],
+
+          // ── OpenRouter ─────────────────────────────────────────────────
+          if (_provider == kProviderOpenRouter) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: TextField(
+                controller: _orKeyCtrl,
+                obscureText: _obscureOrKey,
+                decoration: InputDecoration(
+                  labelText: 'OpenRouter API-Key',
+                  hintText: 'sk-or-...',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: Icon(_obscureOrKey
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined),
+                    onPressed: () =>
+                        setState(() => _obscureOrKey = !_obscureOrKey),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _isLoadingOrModels
+                        ? const LinearProgressIndicator()
+                        : DropdownButtonFormField<String>(
+                            initialValue: _orModels.any((m) => m.id == _orModel)
+                                ? _orModel
+                                : null,
+                            decoration: const InputDecoration(
+                              labelText: 'Modell',
+                              border: OutlineInputBorder(),
+                            ),
+                            isExpanded: true,
+                            hint: Text(_orModel.isEmpty
+                                ? 'Modelle laden…'
+                                : _orModel),
+                            items: _orModels
+                                .map((m) => DropdownMenuItem(
+                                      value: m.id,
+                                      child: Text(
+                                        '${m.isFree ? '✦ ' : ''}${m.name}',
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ))
+                                .toList(),
+                            onChanged: (v) {
+                              if (v != null) setState(() => _orModel = v);
+                            },
+                          ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.outlined(
+                    icon: const Icon(Icons.refresh),
+                    tooltip: 'Modelle neu laden',
+                    onPressed: _isLoadingOrModels ? null : _loadOrModels,
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+              child: Text(
+                'API-Key unter openrouter.ai erstellen. '
+                'Kostenlose Modelle (✦) sind gratis nutzbar.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color:
+                          Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
+          ],
+
+          // Speichern-Button
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: SizedBox(
               width: double.infinity,
               child: FilledButton(
@@ -310,9 +455,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
+                            strokeWidth: 2, color: Colors.white),
                       )
                     : const Text('KI-Einstellungen speichern'),
               ),
@@ -320,11 +463,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
 
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
             child: Text(
-              'Dein API-Key wird ausschließlich lokal auf dem Gerät gespeichert '
-              'und direkt an die Anthropic-API gesendet – kein eigener Server, '
-              'kein Tracking. Schlüssel unter console.anthropic.com erstellen.',
+              'API-Keys werden ausschließlich lokal gespeichert und '
+              'direkt an den gewählten Anbieter gesendet – kein eigener Server.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),

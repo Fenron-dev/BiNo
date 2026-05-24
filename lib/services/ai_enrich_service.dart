@@ -1,8 +1,7 @@
 // Datei: lib/services/ai_enrich_service.dart
 //
-// ZWECK: Ruft die Anthropic Messages-API mit dem Nutzer-eigenen API-Key auf.
-//        Liefert strukturierte Ergebnisse für die vier Anreicherungs-Aktionen:
-//        Zusammenfassen, Titel generieren, Tags vorschlagen, Metadaten extrahieren.
+// ZWECK: Ruft KI-APIs (Anthropic oder OpenRouter) auf.
+//        Liefert strukturierte Ergebnisse für die vier Anreicherungs-Aktionen.
 // ABHÄNGIGKEITEN: http, dart:convert, AiSettingsService.
 // PHASE: 5 – KI-Anreicherung.
 
@@ -12,28 +11,45 @@ import 'package:http/http.dart' as http;
 
 import 'ai_settings_service.dart';
 
+/// Ein OpenRouter-Modell mit ID, Anzeigename und Free-Tier-Flag.
+class OpenRouterModel {
+  final String id;
+  final String name;
+  final bool isFree;
+
+  const OpenRouterModel({
+    required this.id,
+    required this.name,
+    required this.isFree,
+  });
+}
+
 class AiEnrichService {
   final AiSettingsService _settings;
 
-  static const _endpoint = 'https://api.anthropic.com/v1/messages';
-  static const _apiVersion = '2023-06-01';
+  static const _anthropicEndpoint = 'https://api.anthropic.com/v1/messages';
+  static const _openRouterEndpoint =
+      'https://openrouter.ai/api/v1/chat/completions';
+  static const _anthropicVersion = '2023-06-01';
   static const _system =
       'Du bist ein Assistent für eine persönliche Notiz-App. '
       'Antworte immer auf Deutsch. Sei prägnant und direkt.';
 
   AiEnrichService(this._settings);
 
-  Future<String> _call(String prompt) async {
-    final key = await _settings.getApiKey();
-    if (key == null) throw Exception('Kein API-Key konfiguriert.');
-    final model = await _settings.getModel();
+  // ── Interne Call-Methoden ─────────────────────────────────────────────────
+
+  Future<String> _callAnthropic(String prompt) async {
+    final key = await _settings.getAnthropicKey();
+    if (key == null) throw Exception('Kein Anthropic-API-Key konfiguriert.');
+    final model = await _settings.getAnthropicModel();
 
     final res = await http
         .post(
-          Uri.parse(_endpoint),
+          Uri.parse(_anthropicEndpoint),
           headers: {
             'x-api-key': key,
-            'anthropic-version': _apiVersion,
+            'anthropic-version': _anthropicVersion,
             'content-type': 'application/json',
           },
           body: jsonEncode({
@@ -58,6 +74,52 @@ class AiEnrichService {
     final content = (data['content'] as List).first as Map<String, dynamic>;
     return content['text'] as String;
   }
+
+  Future<String> _callOpenRouter(String prompt) async {
+    final key = await _settings.getOpenRouterKey();
+    if (key == null) throw Exception('Kein OpenRouter-API-Key konfiguriert.');
+    final model = await _settings.getOpenRouterModel();
+
+    final res = await http
+        .post(
+          Uri.parse(_openRouterEndpoint),
+          headers: {
+            'Authorization': 'Bearer $key',
+            'HTTP-Referer': 'https://github.com/Fenron-dev/BiNo',
+            'X-Title': 'BiNo',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'model': model,
+            'max_tokens': 1024,
+            'messages': [
+              {'role': 'system', 'content': _system},
+              {'role': 'user', 'content': prompt},
+            ],
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+
+    if (res.statusCode != 200) {
+      final err = jsonDecode(res.body) as Map<String, dynamic>;
+      final msg = ((err['error'] as Map?)?['message'] as String?) ??
+          'API-Fehler ${res.statusCode}';
+      throw Exception(msg);
+    }
+
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    final choices = data['choices'] as List;
+    final message = (choices.first as Map)['message'] as Map<String, dynamic>;
+    return message['content'] as String;
+  }
+
+  Future<String> _call(String prompt) async {
+    final provider = await _settings.getProvider();
+    if (provider == kProviderOpenRouter) return _callOpenRouter(prompt);
+    return _callAnthropic(prompt);
+  }
+
+  // ── Öffentliche Aktionen ──────────────────────────────────────────────────
 
   Future<String> summarize(String content) => _call(
         'Fasse diesen Eintrag in 1–3 Sätzen zusammen. '
@@ -105,6 +167,39 @@ class AiEnrichService {
       return map.map((k, v) => MapEntry(k, v.toString()));
     } catch (_) {
       return {};
+    }
+  }
+
+  // ── OpenRouter Modell-Liste ───────────────────────────────────────────────
+
+  /// Lädt alle verfügbaren OpenRouter-Modelle (kostenlose zuerst).
+  static Future<List<OpenRouterModel>> fetchOpenRouterModels() async {
+    try {
+      final res = await http
+          .get(Uri.parse('https://openrouter.ai/api/v1/models'))
+          .timeout(const Duration(seconds: 15));
+      if (res.statusCode != 200) return [];
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final models = (data['data'] as List).map((m) {
+        final id = m['id'] as String;
+        final name = m['name'] as String? ?? id;
+        final promptPrice =
+            (m['pricing']?['prompt'] as String?) ?? '1';
+        final isFree = double.tryParse(promptPrice) == 0.0;
+        return OpenRouterModel(id: id, name: name, isFree: isFree);
+      }).toList();
+
+      // Kostenlose Modelle zuerst, dann alphabetisch.
+      models.sort((a, b) {
+        if (a.isFree && !b.isFree) return -1;
+        if (!a.isFree && b.isFree) return 1;
+        return a.name.compareTo(b.name);
+      });
+
+      return models;
+    } catch (_) {
+      return [];
     }
   }
 }
