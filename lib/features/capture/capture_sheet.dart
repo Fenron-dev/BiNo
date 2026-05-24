@@ -16,6 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/di.dart';
 import '../../data/db/database.dart' hide Container;
 import '../../data/db/tables/entries.dart';
+import '../../services/ocr_service.dart';
 import '../../services/url_metadata_service.dart';
 import 'capture_controller.dart';
 
@@ -29,6 +30,7 @@ class CaptureSheet extends ConsumerStatefulWidget {
 
 class _CaptureSheetState extends ConsumerState<CaptureSheet> {
   final TextEditingController _textController = TextEditingController();
+  bool _isScanning = false;
 
   @override
   void dispose() {
@@ -84,6 +86,45 @@ class _CaptureSheetState extends ConsumerState<CaptureSheet> {
     _textController.value = _textController.value.copyWith(
       text: newText,
       selection: TextSelection.collapsed(offset: pos + insert.length),
+    );
+    ref.read(captureControllerProvider.notifier).onBodyChanged(newText);
+  }
+
+  Future<void> _scanForUrls() async {
+    final images = ref.read(captureControllerProvider).pendingImages;
+    if (images.isEmpty) return;
+
+    setState(() => _isScanning = true);
+
+    // Erstes Bild scannen – bei mehreren Bildern nehmen wir das aktuellste.
+    final imageFile = File(images.last.path);
+    final result = await OcrService.processImage(imageFile);
+
+    if (!mounted) return;
+    setState(() => _isScanning = false);
+
+    if (!result.hasText) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kein Text im Foto erkannt.')),
+      );
+      return;
+    }
+
+    // Ergebnis-Dialog zeigen; gibt die gewählte URL oder den Rohtext zurück.
+    final insert = await showDialog<String>(
+      context: context,
+      builder: (ctx) => _OcrResultDialog(result: result),
+    );
+
+    if (insert == null || insert.isEmpty || !mounted) return;
+
+    // Einfügen ans Ende des Textes (mit Zeilenumbruch wenn Inhalt vorhanden).
+    final current = _textController.text.trim();
+    final newText =
+        current.isEmpty ? insert : '$current\n$insert';
+    _textController.value = _textController.value.copyWith(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newText.length),
     );
     ref.read(captureControllerProvider.notifier).onBodyChanged(newText);
   }
@@ -165,6 +206,11 @@ class _CaptureSheetState extends ConsumerState<CaptureSheet> {
             onCamera: () => controller.pickImageFromCamera(),
             onWikilink: _insertWikilink,
             onPaste: _pasteFromClipboard,
+            // URL-Scan-Button nur sichtbar wenn Fotos vorhanden.
+            onScanUrl: captureState.pendingImages.isNotEmpty
+                ? (_isScanning ? null : _scanForUrls)
+                : null,
+            isScanning: _isScanning,
           ),
 
           // Eingabezeile
@@ -314,12 +360,17 @@ class _ActionBar extends StatelessWidget {
   final VoidCallback onCamera;
   final VoidCallback onWikilink;
   final VoidCallback onPaste;
+  /// null = Button ausblenden. Callback null = gerade am Scannen (disabled).
+  final VoidCallback? onScanUrl;
+  final bool isScanning;
 
   const _ActionBar({
     required this.onGallery,
     required this.onCamera,
     required this.onWikilink,
     required this.onPaste,
+    this.onScanUrl,
+    this.isScanning = false,
   });
 
   @override
@@ -349,6 +400,30 @@ class _ActionBar extends StatelessWidget {
             label: '[[Link]]',
             onTap: onWikilink,
           ),
+          // Wird nur angezeigt wenn Fotos im Sheet vorhanden sind.
+          if (onScanUrl != null || isScanning)
+            isScanning
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        SizedBox(width: 6),
+                        Text('Scanne…',
+                            style: TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                  )
+                : _ActionButton(
+                    icon: Icons.document_scanner_outlined,
+                    label: 'URL erkennen',
+                    onTap: onScanUrl!,
+                  ),
         ],
       ),
     );
@@ -676,6 +751,145 @@ class _WikilinkPickerDialogState extends State<_WikilinkPickerDialog> {
           const SizedBox(height: 8),
         ],
       ),
+    );
+  }
+}
+
+// ── OCR-Ergebnis-Dialog ───────────────────────────────────────────────────────
+
+/// Zeigt das OCR-Ergebnis an: gefundene URLs zur Auswahl + Rohtext als Vorschau.
+///
+/// ERWEITERBARKEIT: rawText kann später an die KI übergeben werden, um
+/// Titel, Serie, Beschreibung und weitere Felder strukturiert zu extrahieren.
+/// Der Dialog liefert dann zusätzliche Aktionen (z. B. "KI-Anreicherung starten").
+class _OcrResultDialog extends StatefulWidget {
+  final OcrResult result;
+
+  const _OcrResultDialog({required this.result});
+
+  @override
+  State<_OcrResultDialog> createState() => _OcrResultDialogState();
+}
+
+class _OcrResultDialogState extends State<_OcrResultDialog> {
+  late String? _selectedUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedUrl =
+        widget.result.urls.isNotEmpty ? widget.result.urls.first : null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasUrls = widget.result.hasUrls;
+
+    return AlertDialog(
+      title: Row(
+        children: [
+          Icon(Icons.document_scanner_outlined,
+              color: theme.colorScheme.primary),
+          const SizedBox(width: 8),
+          Text(hasUrls ? 'URL erkannt' : 'Text erkannt'),
+        ],
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ── URLs ──────────────────────────────────────────────────────
+              if (hasUrls) ...[
+                Text(
+                  'Gefundene URL${widget.result.urls.length > 1 ? 's' : ''}:',
+                  style: theme.textTheme.labelMedium
+                      ?.copyWith(color: theme.colorScheme.primary),
+                ),
+                const SizedBox(height: 4),
+                RadioGroup<String>(
+                  groupValue: _selectedUrl ?? '',
+                  onChanged: (v) => setState(() => _selectedUrl = v),
+                  child: Column(
+                    children: widget.result.urls
+                        .map(
+                          (url) => RadioListTile<String>(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              url,
+                              style: theme.textTheme.bodySmall,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            value: url,
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+                const Divider(height: 16),
+              ],
+
+              // ── Rohtext ───────────────────────────────────────────────────
+              Text(
+                'Erkannter Text:',
+                style: theme.textTheme.labelMedium
+                    ?.copyWith(color: theme.colorScheme.primary),
+              ),
+              const SizedBox(height: 4),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Text(
+                    widget.result.rawText,
+                    style: theme.textTheme.bodySmall,
+                    maxLines: 8,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+
+              // Hinweis auf spätere KI-Anreicherung
+              const SizedBox(height: 8),
+              Text(
+                'Tipp: Mit KI-Anreicherung (Phase 5) können aus diesem Text '
+                'automatisch Titel, Serie und Beschreibung extrahiert werden.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Abbrechen'),
+        ),
+        if (hasUrls)
+          FilledButton(
+            onPressed: _selectedUrl != null
+                ? () => Navigator.of(context).pop(_selectedUrl)
+                : null,
+            child: const Text('URL übernehmen'),
+          )
+        else
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(context).pop(widget.result.rawText),
+            child: const Text('Text einfügen'),
+          ),
+      ],
     );
   }
 }

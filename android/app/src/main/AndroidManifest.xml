@@ -90,6 +90,13 @@
             android:name="flutterEmbedding"
             android:value="2"/>
 
+        <!-- ML Kit: OCR-Modell (Lateinisch) beim App-Install vorherunterladen.
+             Ohne diesen Eintrag wird das Modell erst beim ersten Scan geladen,
+             was offline fehlschlägt oder mehrere Sekunden Verzögerung erzeugt. -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="ocr"/>
+
     </application>
 
     <!-- Intent-Queries für Flutter-Textverarbeitung -->
