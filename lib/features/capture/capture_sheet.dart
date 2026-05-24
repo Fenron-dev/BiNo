@@ -772,13 +772,24 @@ class _OcrResultDialog extends StatefulWidget {
 }
 
 class _OcrResultDialogState extends State<_OcrResultDialog> {
-  late String? _selectedUrl;
+  // Editierbares Feld – enthält die aktuell gewählte URL oder den Rohtext.
+  // Der Nutzer kann den Wert vor dem Einfügen korrigieren (z. B. OCR-Artefakte
+  // am Anfang/Ende entfernen oder die URL manuell kürzen).
+  late final TextEditingController _editCtrl;
 
   @override
   void initState() {
     super.initState();
-    _selectedUrl =
-        widget.result.urls.isNotEmpty ? widget.result.urls.first : null;
+    final initialText = widget.result.urls.isNotEmpty
+        ? widget.result.urls.first
+        : widget.result.rawText;
+    _editCtrl = TextEditingController(text: initialText);
+  }
+
+  @override
+  void dispose() {
+    _editCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -802,66 +813,106 @@ class _OcrResultDialogState extends State<_OcrResultDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // ── URLs ──────────────────────────────────────────────────────
-              if (hasUrls) ...[
+              // ── URL-Auswahl (wenn mehrere gefunden) ───────────────────────
+              if (hasUrls && widget.result.urls.length > 1) ...[
                 Text(
-                  'Gefundene URL${widget.result.urls.length > 1 ? 's' : ''}:',
+                  'Gefundene URLs – antippen zum Auswählen:',
                   style: theme.textTheme.labelMedium
                       ?.copyWith(color: theme.colorScheme.primary),
                 ),
                 const SizedBox(height: 4),
-                RadioGroup<String>(
-                  groupValue: _selectedUrl ?? '',
-                  onChanged: (v) => setState(() => _selectedUrl = v),
-                  child: Column(
-                    children: widget.result.urls
-                        .map(
-                          (url) => RadioListTile<String>(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(
+                ...widget.result.urls.map(
+                  (url) => InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: () => setState(() => _editCtrl.text = url),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 6, horizontal: 4),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _editCtrl.text == url
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_off,
+                            size: 18,
+                            color: _editCtrl.text == url
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.outline,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
                               url,
                               style: theme.textTheme.bodySmall,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            value: url,
                           ),
-                        )
-                        .toList(),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
                 const Divider(height: 16),
               ],
 
-              // ── Rohtext ───────────────────────────────────────────────────
+              // ── Bearbeitbares Feld ────────────────────────────────────────
               Text(
-                'Erkannter Text:',
+                hasUrls ? 'URL bearbeiten:' : 'Text bearbeiten:',
                 style: theme.textTheme.labelMedium
                     ?.copyWith(color: theme.colorScheme.primary),
               ),
-              const SizedBox(height: 4),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: Text(
-                    widget.result.rawText,
-                    style: theme.textTheme.bodySmall,
-                    maxLines: 8,
-                    overflow: TextOverflow.ellipsis,
+              const SizedBox(height: 6),
+              TextField(
+                controller: _editCtrl,
+                maxLines: hasUrls ? 2 : 6,
+                minLines: 1,
+                keyboardType:
+                    hasUrls ? TextInputType.url : TextInputType.multiline,
+                style: theme.textTheme.bodySmall,
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  filled: true,
+                  fillColor: theme.colorScheme.surfaceContainerHighest,
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.clear, size: 18),
+                    tooltip: 'Leeren',
+                    onPressed: () => _editCtrl.clear(),
                   ),
                 ),
               ),
 
-              // Hinweis auf spätere KI-Anreicherung
+              // ── Rohtext-Vorschau (nur bei URL-Modus als Kontext) ──────────
+              if (hasUrls) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Vollständiger OCR-Text (Referenz):',
+                  style: theme.textTheme.labelMedium
+                      ?.copyWith(color: theme.colorScheme.primary),
+                ),
+                const SizedBox(height: 4),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: SelectableText(
+                      widget.result.rawText,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      maxLines: 6,
+                    ),
+                  ),
+                ),
+              ],
+
               const SizedBox(height: 8),
               Text(
-                'Tipp: Mit KI-Anreicherung (Phase 5) können aus diesem Text '
-                'automatisch Titel, Serie und Beschreibung extrahiert werden.',
+                'Später: KI extrahiert aus dem Text automatisch Titel, '
+                'Serie und Beschreibung.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                   fontStyle: FontStyle.italic,
@@ -876,19 +927,13 @@ class _OcrResultDialogState extends State<_OcrResultDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Abbrechen'),
         ),
-        if (hasUrls)
-          FilledButton(
-            onPressed: _selectedUrl != null
-                ? () => Navigator.of(context).pop(_selectedUrl)
-                : null,
-            child: const Text('URL übernehmen'),
-          )
-        else
-          FilledButton(
-            onPressed: () =>
-                Navigator.of(context).pop(widget.result.rawText),
-            child: const Text('Text einfügen'),
-          ),
+        FilledButton(
+          onPressed: () {
+            final value = _editCtrl.text.trim();
+            if (value.isNotEmpty) Navigator.of(context).pop(value);
+          },
+          child: Text(hasUrls ? 'URL übernehmen' : 'Text einfügen'),
+        ),
       ],
     );
   }
