@@ -1,6 +1,6 @@
 // Datei: lib/services/ai_enrich_service.dart
 //
-// ZWECK: Ruft KI-APIs (Anthropic oder OpenRouter) auf.
+// ZWECK: Ruft KI-APIs auf (Anthropic, OpenRouter oder lokales Ollama/LM-Studio).
 //        Liefert strukturierte Ergebnisse für die vier Anreicherungs-Aktionen.
 // ABHÄNGIGKEITEN: http, dart:convert, AiSettingsService.
 // PHASE: 5 – KI-Anreicherung.
@@ -113,9 +113,40 @@ class AiEnrichService {
     return message['content'] as String;
   }
 
+  // Ollama und LM-Studio nutzen beide das OpenAI-kompatible Format.
+  // Kein API-Key nötig; der Nutzer konfiguriert nur die Basis-URL.
+  Future<String> _callOllama(String prompt) async {
+    final baseUrl = await _settings.getOllamaBaseUrl();
+    final model = await _settings.getOllamaModel();
+
+    final res = await http
+        .post(
+          Uri.parse('$baseUrl/v1/chat/completions'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'model': model,
+            'messages': [
+              {'role': 'system', 'content': _system},
+              {'role': 'user', 'content': prompt},
+            ],
+          }),
+        )
+        .timeout(const Duration(seconds: 120));
+
+    if (res.statusCode != 200) {
+      throw Exception('Ollama-Fehler ${res.statusCode}: ${res.body}');
+    }
+
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    final choices = data['choices'] as List;
+    final message = (choices.first as Map)['message'] as Map<String, dynamic>;
+    return message['content'] as String;
+  }
+
   Future<String> _call(String prompt) async {
     final provider = await _settings.getProvider();
     if (provider == kProviderOpenRouter) return _callOpenRouter(prompt);
+    if (provider == kProviderOllama) return _callOllama(prompt);
     return _callAnthropic(prompt);
   }
 

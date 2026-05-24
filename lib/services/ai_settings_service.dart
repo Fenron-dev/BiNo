@@ -1,7 +1,7 @@
 // Datei: lib/services/ai_settings_service.dart
 //
 // ZWECK: Persistiert KI-Einstellungen (Provider, API-Keys, Modelle) als JSON.
-//        Unterstützt Anthropic und OpenRouter als Provider.
+//        Unterstützt Anthropic, OpenRouter und Ollama/LM-Studio als Provider.
 // ABHÄNGIGKEITEN: dart:io, dart:convert, path, path_provider.
 // PHASE: 5 – KI-Anreicherung.
 
@@ -20,10 +20,13 @@ const kAiModels = <(String, String)>[
 
 const _kDefaultAnthropicModel = 'claude-haiku-4-5-20251001';
 const _kDefaultOpenRouterModel = 'mistralai/mistral-7b-instruct:free';
+const _kDefaultOllamaBaseUrl = 'http://10.0.2.2:11434';
+const _kDefaultOllamaModel = 'llama3.2';
 
 /// Unterstützte KI-Anbieter.
 const kProviderAnthropic = 'anthropic';
 const kProviderOpenRouter = 'openrouter';
+const kProviderOllama = 'ollama';
 
 class AiSettingsService {
   static const _filename = 'ai_settings.json';
@@ -33,6 +36,8 @@ class AiSettingsService {
   String _anthropicModel = _kDefaultAnthropicModel;
   String? _openRouterKey;
   String _openRouterModel = _kDefaultOpenRouterModel;
+  String _ollamaBaseUrl = _kDefaultOllamaBaseUrl;
+  String _ollamaModel = _kDefaultOllamaModel;
   bool _loaded = false;
 
   Future<void> _ensureLoaded() async {
@@ -53,6 +58,10 @@ class AiSettingsService {
           _openRouterKey = json['openrouter_key'] as String?;
           _openRouterModel =
               json['openrouter_model'] as String? ?? _kDefaultOpenRouterModel;
+          _ollamaBaseUrl =
+              json['ollama_base_url'] as String? ?? _kDefaultOllamaBaseUrl;
+          _ollamaModel =
+              json['ollama_model'] as String? ?? _kDefaultOllamaModel;
         } else {
           // Altes Format → als Anthropic übernehmen.
           _anthropicKey = json['api_key'] as String?;
@@ -97,12 +106,26 @@ class AiSettingsService {
     return _openRouterModel;
   }
 
+  Future<String> getOllamaBaseUrl() async {
+    await _ensureLoaded();
+    final url = _ollamaBaseUrl.trim();
+    return url.isEmpty ? _kDefaultOllamaBaseUrl : url;
+  }
+
+  Future<String> getOllamaModel() async {
+    await _ensureLoaded();
+    final m = _ollamaModel.trim();
+    return m.isEmpty ? _kDefaultOllamaModel : m;
+  }
+
   Future<void> save({
     String? provider,
     String? anthropicKey,
     String? anthropicModel,
     String? openRouterKey,
     String? openRouterModel,
+    String? ollamaBaseUrl,
+    String? ollamaModel,
   }) async {
     await _ensureLoaded();
     if (provider != null) _provider = provider;
@@ -115,6 +138,8 @@ class AiSettingsService {
           openRouterKey.trim().isEmpty ? null : openRouterKey.trim();
     }
     if (openRouterModel != null) _openRouterModel = openRouterModel;
+    if (ollamaBaseUrl != null) _ollamaBaseUrl = ollamaBaseUrl.trim();
+    if (ollamaModel != null) _ollamaModel = ollamaModel.trim();
 
     final dir = await getApplicationDocumentsDirectory();
     final file = File(p.join(dir.path, _filename));
@@ -124,6 +149,8 @@ class AiSettingsService {
       'anthropic_model': _anthropicModel,
       'openrouter_key': _openRouterKey,
       'openrouter_model': _openRouterModel,
+      'ollama_base_url': _ollamaBaseUrl,
+      'ollama_model': _ollamaModel,
     }));
   }
 }

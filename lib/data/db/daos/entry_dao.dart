@@ -169,6 +169,22 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
             ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]))
           .get();
 
+  /// Gibt die neuesten Einträge zurück (für den Wikilink-Picker).
+  /// Zeigt sowohl Einträge mit als auch ohne Titel, damit alle verlinkt
+  /// werden können – beim Verlinken wird der Titel automatisch gesetzt.
+  Future<List<Entry>> getRecentEntries(String workspaceId,
+          {int limit = 100}) =>
+      (select(entries)
+            ..where((t) => t.workspaceId.equals(workspaceId))
+            ..orderBy([
+              (t) => OrderingTerm(
+                    expression: t.createdAt,
+                    mode: OrderingMode.desc,
+                  ),
+            ])
+            ..limit(limit))
+          .get();
+
   /// Schaltet den Pinned-Status eines Eintrags um.
   Future<void> togglePin(String id) async {
     final entry = await getEntryById(id);

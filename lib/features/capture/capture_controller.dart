@@ -185,11 +185,20 @@ class CaptureController extends StateNotifier<CaptureState> {
       // Image wenn nur Bilder, Text wenn nur Text.
       final type = _determineType(body);
 
+      // sourceUrl: priorisiert detectedUrl (enthält OG-Metadaten).
+      // Fallback: URL direkt aus dem Body extrahieren, damit auch Links
+      // ohne Open-Graph-Metadaten (z. B. MP3-Direktlinks) korrekt gespeichert
+      // und als Link-Typ angezeigt werden.
+      String? sourceUrl = state.detectedUrl?.url;
+      if (sourceUrl == null && type == EntryType.link) {
+        final m = RegExp(r'https?://\S+').firstMatch(body.trim());
+        sourceUrl = m?.group(0);
+      }
+
       final entryId = await _entryRepo.createEntry(
         body: body.trim(),
         type: type,
-        // URL-Metadaten als Quell-URL speichern.
-        sourceUrl: state.detectedUrl?.url,
+        sourceUrl: sourceUrl,
       );
 
       // Bilder speichern (parallel für bessere Performance).

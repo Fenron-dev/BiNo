@@ -1,9 +1,9 @@
 // Datei: lib/features/settings/settings_screen.dart
 //
-// ZWECK: Einstellungen-Screen mit Backup-Export und -Import.
-//        Erreichbar über das Zahnrad-Icon im Feed-Screen.
-// ABHÄNGIGKEITEN: BackupService, FilePicker, SystemNavigator.
-// PHASE: 2 – Datensicherung.
+// ZWECK: Einstellungen-Screen mit Backup-Export/-Import, Theme-Auswahl und
+//        KI-Konfiguration (Anthropic, OpenRouter, Ollama/LM-Studio).
+// ABHÄNGIGKEITEN: BackupService, FilePicker, AiSettingsService, AiEnrichService.
+// PHASE: 5 – KI-Anreicherung + Darstellung.
 
 import 'dart:io';
 
@@ -32,15 +32,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   // ── KI-Einstellungen ──────────────────────────────────────────────────────
   String _provider = kProviderAnthropic;
+
+  // Anthropic
   final _anthKeyCtrl = TextEditingController();
   String _anthModel = kAiModels.first.$1;
   bool _obscureAnthKey = true;
 
+  // OpenRouter
   final _orKeyCtrl = TextEditingController();
   String _orModel = '';
   bool _obscureOrKey = true;
   List<OpenRouterModel> _orModels = [];
   bool _isLoadingOrModels = false;
+  bool _onlyFreeOrModels = false;
+
+  // Ollama / LM-Studio
+  final _ollamaBaseUrlCtrl = TextEditingController();
+  final _ollamaModelCtrl = TextEditingController();
 
   bool _isSavingAi = false;
 
@@ -54,6 +62,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void dispose() {
     _anthKeyCtrl.dispose();
     _orKeyCtrl.dispose();
+    _ollamaBaseUrlCtrl.dispose();
+    _ollamaModelCtrl.dispose();
     super.dispose();
   }
 
@@ -64,6 +74,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final anthModel = await s.getAnthropicModel();
     final orKey = await s.getOpenRouterKey();
     final orModel = await s.getOpenRouterModel();
+    final ollamaUrl = await s.getOllamaBaseUrl();
+    final ollamaModel = await s.getOllamaModel();
     if (!mounted) return;
     setState(() {
       _provider = provider;
@@ -71,6 +83,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _anthModel = anthModel;
       _orKeyCtrl.text = orKey ?? '';
       _orModel = orModel;
+      _ollamaBaseUrlCtrl.text = ollamaUrl;
+      _ollamaModelCtrl.text = ollamaModel;
     });
     if (provider == kProviderOpenRouter) _loadOrModels();
   }
@@ -82,9 +96,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     setState(() {
       _orModels = models;
       _isLoadingOrModels = false;
-      // Falls gespeichertes Modell nicht in der Liste → behalten.
-      if (models.isNotEmpty &&
-          models.every((m) => m.id != _orModel)) {
+      // Wenn das gespeicherte Modell nicht in der neuen Liste ist → erstes auswählen.
+      if (models.isNotEmpty && models.every((m) => m.id != _orModel)) {
         _orModel = models.first.id;
       }
     });
@@ -98,6 +111,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           anthropicModel: _anthModel,
           openRouterKey: _orKeyCtrl.text,
           openRouterModel: _orModel,
+          ollamaBaseUrl: _ollamaBaseUrlCtrl.text,
+          ollamaModel: _ollamaModelCtrl.text,
         );
     if (!mounted) return;
     setState(() => _isSavingAi = false);
@@ -118,8 +133,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     switch (result) {
       case BackupSuccess(:final path):
-        // Android-Share-Sheet öffnen: Nutzer wählt selbst den Speicherort
-        // (Dateien-App, Google Drive, USB, E-Mail, WhatsApp …).
         await Share.shareXFiles(
           [XFile(path, mimeType: 'application/zip')],
           subject: 'BiNo – Bit Notes Backup',
@@ -132,7 +145,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // ── Import ────────────────────────────────────────────────────────────────
 
   Future<void> _importBackup() async {
-    // Datei auswählen.
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['zip'],
@@ -142,14 +154,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (result == null || result.files.single.path == null) return;
     final zipPath = result.files.single.path!;
 
-    // Sicherheitsbestätigung: Alle aktuellen Daten werden überschrieben.
     if (!mounted) return;
     final confirmed = await _showImportConfirmDialog();
     if (!confirmed) return;
 
     setState(() => _isImporting = true);
 
-    // DB schließen, bevor Dateien überschrieben werden.
     await ref.read(databaseProvider).close();
 
     final importResult =
@@ -207,13 +217,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         actions: [
           FilledButton(
-            onPressed: () {
-              // exit(0) beendet den gesamten Dart-Prozess sofort.
-              // SystemNavigator.pop() reicht nicht: Der Prozess kann im
-              // Hintergrund weiterlaufen und Drift greift auf die
-              // ausgetauschte DB mit dem alten Handle zu → Datenverlust.
-              exit(0);
-            },
+            onPressed: () => exit(0),
             child: const Text('App beenden'),
           ),
         ],
@@ -235,6 +239,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Gefilterte OpenRouter-Modelle (nur kostenlose wenn Toggle aktiv)
+    final filteredOrModels = _onlyFreeOrModels
+        ? _orModels.where((m) => m.isFree).toList()
+        : _orModels;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Einstellungen')),
@@ -246,7 +254,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.upload_outlined),
             title: const Text('Backup exportieren'),
-            subtitle: const Text('Einträge + Anhänge als ZIP – Speicherort frei wählbar'),
+            subtitle: const Text(
+                'Einträge + Anhänge als ZIP – Speicherort frei wählbar'),
             trailing: _isExporting
                 ? const SizedBox(
                     width: 20,
@@ -288,20 +297,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           // ── KI (AI-Anreicherung) ───────────────────────────────────────
           _SectionHeader(title: 'KI – Anreicherung'),
 
-          // Provider-Auswahl
+          // Provider-Auswahl: Claude / OpenRouter / Lokal (Ollama)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: SegmentedButton<String>(
               segments: const [
                 ButtonSegment(
                   value: kProviderAnthropic,
-                  label: Text('Anthropic'),
+                  label: Text('Claude'),
                   icon: Icon(Icons.hub_outlined),
                 ),
                 ButtonSegment(
                   value: kProviderOpenRouter,
                   label: Text('OpenRouter'),
                   icon: Icon(Icons.share_outlined),
+                ),
+                ButtonSegment(
+                  value: kProviderOllama,
+                  label: Text('Lokal'),
+                  icon: Icon(Icons.computer_outlined),
                 ),
               ],
               selected: {_provider},
@@ -360,8 +374,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 'API-Key unter console.anthropic.com erstellen '
                 '(separates Konto, nicht das claude.ai-Abo).',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color:
-                          Theme.of(context).colorScheme.onSurfaceVariant,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
               ),
             ),
@@ -388,17 +401,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ),
             ),
+            SwitchListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              title: const Text('Nur kostenlose Modelle anzeigen'),
+              secondary: const Icon(Icons.star_outline),
+              value: _onlyFreeOrModels,
+              dense: true,
+              onChanged: (v) => setState(() => _onlyFreeOrModels = v),
+            ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
               child: Row(
                 children: [
                   Expanded(
                     child: _isLoadingOrModels
                         ? const LinearProgressIndicator()
                         : DropdownButtonFormField<String>(
-                            initialValue: _orModels.any((m) => m.id == _orModel)
-                                ? _orModel
-                                : null,
+                            initialValue:
+                                filteredOrModels.any((m) => m.id == _orModel)
+                                    ? _orModel
+                                    : null,
                             decoration: const InputDecoration(
                               labelText: 'Modell',
                               border: OutlineInputBorder(),
@@ -407,7 +429,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             hint: Text(_orModel.isEmpty
                                 ? 'Modelle laden…'
                                 : _orModel),
-                            items: _orModels
+                            items: filteredOrModels
                                 .map((m) => DropdownMenuItem(
                                       value: m.id,
                                       child: Text(
@@ -436,8 +458,50 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 'API-Key unter openrouter.ai erstellen. '
                 'Kostenlose Modelle (✦) sind gratis nutzbar.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color:
-                          Theme.of(context).colorScheme.onSurfaceVariant,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
+          ],
+
+          // ── Ollama / LM-Studio ─────────────────────────────────────────
+          if (_provider == kProviderOllama) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: TextField(
+                controller: _ollamaBaseUrlCtrl,
+                keyboardType: TextInputType.url,
+                decoration: const InputDecoration(
+                  labelText: 'Server-URL',
+                  hintText: 'http://10.0.2.2:11434',
+                  border: OutlineInputBorder(),
+                  helperText: 'Emulator: 10.0.2.2  |  Gerät: LAN-IP',
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: TextField(
+                controller: _ollamaModelCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Modell-Name',
+                  hintText: 'llama3.2',
+                  border: OutlineInputBorder(),
+                  helperText:
+                      'LM-Studio: Modell-ID aus dem UI kopieren',
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+              child: Text(
+                'Ollama und LM-Studio laufen lokal auf deinem Computer. '
+                'Kein API-Key nötig. '
+                'Für echte Geräte: LAN-IP statt 10.0.2.2 eintragen '
+                '(z. B. 192.168.1.42:11434). '
+                'LM-Studio nutzt Port 1234.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
               ),
             ),
@@ -478,10 +542,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           // ── Info ───────────────────────────────────────────────────────
           _SectionHeader(title: 'Info'),
 
-          ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: const Text('Version'),
-            subtitle: const Text('0.1.0 – Phase 2'),
+          const ListTile(
+            leading: Icon(Icons.info_outline),
+            title: Text('Version'),
+            subtitle: Text('0.1.0 – Phase 5'),
             enabled: false,
           ),
 
@@ -509,10 +573,12 @@ class _ThemeSelector extends ConsumerWidget {
   const _ThemeSelector();
 
   static const _options = [
-    (ThemeService.kSystem, 'System', 'Folgt dem Gerätemodus', Icons.brightness_auto_outlined),
+    (ThemeService.kSystem, 'System', 'Folgt dem Gerätemodus',
+        Icons.brightness_auto_outlined),
     (ThemeService.kLight, 'Hell', null, Icons.light_mode_outlined),
     (ThemeService.kDark, 'Dunkel', null, Icons.dark_mode_outlined),
-    (ThemeService.kOled, 'OLED-Dunkel', 'Schwarze Pixel – spart Akku auf AMOLED', Icons.smartphone_outlined),
+    (ThemeService.kOled, 'OLED-Dunkel',
+        'Schwarze Pixel – spart Akku auf AMOLED', Icons.smartphone_outlined),
   ];
 
   @override
