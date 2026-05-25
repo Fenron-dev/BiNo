@@ -39,6 +39,24 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const SettingsScreen(),
       ),
 
+      // Hub-Eintrag-Detail: Top-Level-Route für Navigation aus Hub-Tabs.
+      // Identische UI wie /feed/detail/:id, aber außerhalb der Shell –
+      // damit der Hub-Screen nach dem Zurück-Navigieren noch aktiv bleibt.
+      GoRoute(
+        path: '/entry/:id',
+        builder: (context, state) => EntryDetailScreen(
+          entryId: state.pathParameters['id']!,
+        ),
+        routes: [
+          GoRoute(
+            path: 'edit',
+            builder: (context, state) => EditEntryScreen(
+              entryId: state.pathParameters['id']!,
+            ),
+          ),
+        ],
+      ),
+
       // Container-Detail: außerhalb der Shell → volle Bildschirmbreite ohne BottomBar.
       // Wird aus Projekte- und Bereiche-Tab heraus aufgerufen.
       GoRoute(

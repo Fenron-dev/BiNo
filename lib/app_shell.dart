@@ -1,9 +1,11 @@
 // Datei: lib/app_shell.dart
 //
 // ZWECK: Persistente App-Hülle mit BottomAppBar (Navigation) und zentralem FAB.
-//        Alle Tabs teilen diese Hülle – sie selbst ändert sich nicht beim Tab-Wechsel.
-// ABHÄNGIGKEITEN: go_router (StatefulNavigationShell), CaptureSheet, AudioCaptureSheet.
-// PHASE: 1 – Feed, Projekte, Bereiche + FAB. Phase 2: Long-Press → AudioCaptureSheet.
+//        Zeigt Hub-Tabs als zusätzliche Nav-Items rechts neben Bereiche.
+//        Wenn ein Hub aktiv ist, wird HubScreen statt des NavigationShell-Inhalts
+//        gerendert (lokaler State-Swap ohne go_router-Branch-Wechsel).
+// ABHÄNGIGKEITEN: go_router (StatefulNavigationShell), CaptureSheet,
+//                 AudioCaptureSheet, hubTabsProvider, HubScreen.
 
 import 'package:flutter/material.dart' hide Container;
 import 'package:flutter/services.dart';
@@ -18,37 +20,42 @@ import 'data/db/database.dart';
 import 'features/capture/capture_sheet.dart';
 import 'features/capture/audio_capture_sheet.dart';
 import 'features/containers/container_form_sheet.dart';
+import 'features/hubs/hub_provider.dart';
+import 'features/hubs/hub_screen.dart';
 
-/// App-Hülle mit persistenter Bottom-Navigation und kontextsensitivem FAB.
+/// App-Hülle mit persistenter Bottom-Navigation, FAB und dynamischen Hub-Tabs.
 ///
-/// WARUM BottomAppBar + FAB statt NavigationBar?
-/// Material 3's NavigationBar unterstützt keinen eingebetteten Center-FAB.
-/// BottomAppBar mit CircularNotchedRectangle + FloatingActionButtonLocation.centerDocked
-/// ist das korrekte Material-3-Muster für diese Layout-Anforderung (WhatsApp-/Telegram-Stil).
-///
-/// FAB-Verhalten nach Tab:
-/// - Feed (0): Kurztippen → CaptureSheet, Long-Press → AudioCaptureSheet
-/// - Projekte (1): Kurztippen → neues Projekt erstellen
-/// - Bereiche (2): Kurztippen → neuen Bereich erstellen
-class AppShell extends ConsumerWidget {
+/// Hub-Tab-Navigation nutzt lokalen State (_activeHubId) statt go_router-Branches,
+/// da StatefulShellRoute statische Branches erfordert.
+/// Wenn _activeHubId gesetzt ist, rendert body den HubScreen direkt.
+/// Top-Level-Routen (entry-Detail, Settings) liegen über der Shell und
+/// funktionieren unabhängig davon, ob ein Hub oder ein Standard-Tab aktiv ist.
+class AppShell extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
 
   const AppShell({super.key, required this.navigationShell});
 
-  /// Wechselt zum Tab mit dem gegebenen Index.
-  ///
-  /// initialLocation: true setzt den Tab auf seinen Root-Screen zurück,
-  /// wenn der Nutzer den bereits aktiven Tab nochmals antippt –
-  /// Standard-Verhalten in Chat-Apps (Doppeltipp scrollt nach oben).
-  void _onTabTapped(int index) {
-    navigationShell.goBranch(
+  @override
+  ConsumerState<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends ConsumerState<AppShell> {
+  /// ID des aktiven Hub-Tabs. Null = Standard-Tab ist aktiv.
+  String? _activeHubId;
+
+  void _onStandardTabTapped(int index) {
+    setState(() => _activeHubId = null);
+    widget.navigationShell.goBranch(
       index,
-      initialLocation: index == navigationShell.currentIndex,
+      initialLocation: index == widget.navigationShell.currentIndex && _activeHubId == null,
     );
   }
 
-  /// Öffnet das Quick-Capture-Sheet als modales BottomSheet.
-  void _openCaptureSheet(BuildContext context) {
+  void _onHubTabTapped(String hubId) {
+    setState(() => _activeHubId = hubId);
+  }
+
+  void _openCaptureSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -60,8 +67,7 @@ class AppShell extends ConsumerWidget {
     );
   }
 
-  /// Öffnet das Audio-Capture-Sheet (Long-Press auf FAB im Feed-Tab).
-  void _openAudioCaptureSheet(BuildContext context) {
+  void _openAudioCaptureSheet() {
     HapticFeedback.mediumImpact();
     showModalBottomSheet(
       context: context,
@@ -76,24 +82,22 @@ class AppShell extends ConsumerWidget {
     );
   }
 
-  /// FAB-Aktion je nach aktivem Tab.
-  Future<void> _onFabPressed(BuildContext context, WidgetRef ref) async {
-    switch (navigationShell.currentIndex) {
+  Future<void> _onFabPressed() async {
+    if (_activeHubId != null) {
+      _openCaptureSheet();
+      return;
+    }
+    switch (widget.navigationShell.currentIndex) {
       case 0:
-        _openCaptureSheet(context);
+        _openCaptureSheet();
       case 1:
-        await _createContainer(context, ref, 'project');
+        await _createContainer('project');
       case 2:
-        await _createContainer(context, ref, 'area');
+        await _createContainer('area');
     }
   }
 
-  /// Öffnet das ContainerFormSheet und legt den neuen Container an.
-  Future<void> _createContainer(
-    BuildContext context,
-    WidgetRef ref,
-    String kind,
-  ) async {
+  Future<void> _createContainer(String kind) async {
     final result = await showContainerFormSheet(context);
     if (result == null) return;
     await ref.read(containerDaoProvider).insertContainer(
@@ -111,64 +115,83 @@ class AppShell extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isOnFeed = navigationShell.currentIndex == 0;
+  Widget build(BuildContext context) {
+    final hubs = ref.watch(hubTabsProvider).value ?? [];
+    final isOnFeedOrHub =
+        _activeHubId != null || widget.navigationShell.currentIndex == 0;
+
+    // Hub-Tabs passen nur 2 Slots rechts neben Bereiche (insgesamt max 4 rechts vom FAB).
+    // Wenn mehr als 1 Hub existiert, wird der letzte Slot durch "Mehr"-Button ersetzt.
+    final visibleHubs = hubs.length <= 2 ? hubs : hubs.take(1).toList();
+    final hasOverflow = hubs.length > 2;
 
     return Scaffold(
-      // extendBody: true lässt den Inhalt unter die BottomAppBar rendern.
       extendBody: true,
-      body: navigationShell,
+      body: _activeHubId != null
+          ? HubScreen(key: ValueKey(_activeHubId), hubId: _activeHubId!)
+          : widget.navigationShell,
 
-      // GestureDetector wrappet den FAB für Long-Press (nur im Feed-Tab).
-      // WICHTIG: Kein 'tooltip' auf dem FAB – Tooltip registriert intern
-      // einen eigenen onLongPress-Handler, der den GestureDetector aussticht.
       floatingActionButton: GestureDetector(
-        onLongPress: isOnFeed ? () => _openAudioCaptureSheet(context) : null,
+        onLongPress: isOnFeedOrHub ? _openAudioCaptureSheet : null,
         child: FloatingActionButton(
-          onPressed: () => _onFabPressed(context, ref),
+          onPressed: _onFabPressed,
           child: const Icon(Icons.add),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
 
       bottomNavigationBar: BottomAppBar(
-        // CircularNotchedRectangle erstellt die Einkerbung für den FAB.
         shape: const CircularNotchedRectangle(),
-        // notchMargin: Abstand zwischen FAB-Rand und Einkerbungs-Rand.
         notchMargin: 8.0,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            // Linke Seite: Feed + Projekte
+            // ── Linke Seite ───────────────────────────────────────────────
             _NavItem(
               icon: Icons.home_outlined,
               activeIcon: Icons.home,
               label: 'Feed',
-              index: 0,
-              currentIndex: navigationShell.currentIndex,
-              onTap: () => _onTabTapped(0),
+              isActive: _activeHubId == null &&
+                  widget.navigationShell.currentIndex == 0,
+              onTap: () => _onStandardTabTapped(0),
             ),
             _NavItem(
               icon: Icons.folder_outlined,
               activeIcon: Icons.folder,
               label: 'Projekte',
-              index: 1,
-              currentIndex: navigationShell.currentIndex,
-              onTap: () => _onTabTapped(1),
+              isActive: _activeHubId == null &&
+                  widget.navigationShell.currentIndex == 1,
+              onTap: () => _onStandardTabTapped(1),
             ),
-            // Freiraum für den FAB-Notch in der Mitte.
+
+            // ── FAB-Freiraum ──────────────────────────────────────────────
             const SizedBox(width: 56),
-            // Rechte Seite: Bereiche (Phase 4: + Hub-Tabs)
+
+            // ── Rechte Seite ──────────────────────────────────────────────
             _NavItem(
               icon: Icons.grid_view_outlined,
               activeIcon: Icons.grid_view,
               label: 'Bereiche',
-              index: 2,
-              currentIndex: navigationShell.currentIndex,
-              onTap: () => _onTabTapped(2),
+              isActive: _activeHubId == null &&
+                  widget.navigationShell.currentIndex == 2,
+              onTap: () => _onStandardTabTapped(2),
             ),
-            // Phase 4: Dynamische Hub-Tabs werden hier eingefügt.
-            // Mehr als 4 sichtbare Tabs → Overflow-"Mehr"-Menü.
+
+            // Sichtbare Hub-Tabs (max 1–2)
+            for (final hub in visibleHubs)
+              _HubNavItem(
+                hub: hub,
+                isActive: _activeHubId == hub.id,
+                onTap: () => _onHubTabTapped(hub.id),
+              ),
+
+            // Overflow-Button wenn > 2 Hubs
+            if (hasOverflow)
+              _MoreHubsButton(
+                hubs: hubs,
+                activeHubId: _activeHubId,
+                onHubSelected: _onHubTabTapped,
+              ),
           ],
         ),
       ),
@@ -176,33 +199,26 @@ class AppShell extends ConsumerWidget {
   }
 }
 
-/// Einzelner Navigation-Button in der BottomAppBar.
-///
-/// WARUM kein NavigationDestination?
-/// NavigationDestination gehört zur NavigationBar, nicht zur BottomAppBar.
-/// Wir bauen unsere eigenen Tap-Targets mit Expanded + InkWell.
+// ── Standard-Nav-Item ──────────────────────────────────────────────────────────
+
 class _NavItem extends StatelessWidget {
   final IconData icon;
   final IconData activeIcon;
   final String label;
-  final int index;
-  final int currentIndex;
+  final bool isActive;
   final VoidCallback onTap;
 
   const _NavItem({
     required this.icon,
     required this.activeIcon,
     required this.label,
-    required this.index,
-    required this.currentIndex,
+    required this.isActive,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isActive = index == currentIndex;
     final colorScheme = Theme.of(context).colorScheme;
-
     return Expanded(
       child: InkWell(
         onTap: onTap,
@@ -211,8 +227,9 @@ class _NavItem extends StatelessWidget {
           children: [
             Icon(
               isActive ? activeIcon : icon,
-              color:
-                  isActive ? colorScheme.primary : colorScheme.onSurfaceVariant,
+              color: isActive
+                  ? colorScheme.primary
+                  : colorScheme.onSurfaceVariant,
             ),
             Text(
               label,
@@ -228,4 +245,179 @@ class _NavItem extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── Hub-Nav-Item ───────────────────────────────────────────────────────────────
+
+class _HubNavItem extends StatelessWidget {
+  final Container hub;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _HubNavItem({
+    required this.hub,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    Color hubColor;
+    try {
+      hubColor = Color(
+        int.parse('FF${hub.color.replaceFirst('#', '')}', radix: 16),
+      );
+    } catch (_) {
+      hubColor = colorScheme.primary;
+    }
+
+    final iconData = _hubIconData(hub.icon);
+    final activeColor = isActive ? hubColor : colorScheme.onSurfaceVariant;
+
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(iconData, color: activeColor),
+            Text(
+              hub.name,
+              style: TextStyle(fontSize: 11, color: activeColor),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Overflow-Button für > 2 Hub-Tabs ─────────────────────────────────────────
+
+class _MoreHubsButton extends StatelessWidget {
+  final List<Container> hubs;
+  final String? activeHubId;
+  final ValueChanged<String> onHubSelected;
+
+  const _MoreHubsButton({
+    required this.hubs,
+    required this.activeHubId,
+    required this.onHubSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final hasActiveOverflow =
+        activeHubId != null && hubs.skip(1).any((h) => h.id == activeHubId);
+
+    return Expanded(
+      child: InkWell(
+        onTap: () => _showOverflowSheet(context),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.more_horiz,
+              color: hasActiveOverflow
+                  ? colorScheme.primary
+                  : colorScheme.onSurfaceVariant,
+            ),
+            Text(
+              'Mehr',
+              style: TextStyle(
+                fontSize: 11,
+                color: hasActiveOverflow
+                    ? colorScheme.primary
+                    : colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showOverflowSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (_) => _HubOverflowSheet(
+        hubs: hubs,
+        activeHubId: activeHubId,
+        onHubSelected: (id) {
+          Navigator.of(context).pop();
+          onHubSelected(id);
+        },
+      ),
+    );
+  }
+}
+
+class _HubOverflowSheet extends StatelessWidget {
+  final List<Container> hubs;
+  final String? activeHubId;
+  final ValueChanged<String> onHubSelected;
+
+  const _HubOverflowSheet({
+    required this.hubs,
+    required this.activeHubId,
+    required this.onHubSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 8),
+          ...hubs.map(
+            (hub) => ListTile(
+              leading: Icon(_hubIconData(hub.icon)),
+              title: Text(hub.name),
+              selected: hub.id == activeHubId,
+              onTap: () => onHubSelected(hub.id),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Hilfsfunktion: Icon-Name → IconData ──────────────────────────────────────
+
+IconData _hubIconData(String name) {
+  const map = <String, IconData>{
+    'bookmark': Icons.bookmark,
+    'bookmarks': Icons.bookmarks,
+    'menu_book': Icons.menu_book,
+    'label': Icons.label,
+    'star': Icons.star,
+    'favorite': Icons.favorite,
+    'link': Icons.link,
+    'image': Icons.image,
+    'mic': Icons.mic,
+    'note': Icons.note,
+    'idea': Icons.lightbulb,
+    'todo': Icons.checklist,
+    'inbox': Icons.inbox,
+    'archive': Icons.archive,
+    'folder': Icons.folder,
+    'work': Icons.work,
+    'home': Icons.home,
+    'school': Icons.school,
+    'code': Icons.code,
+    'travel': Icons.flight,
+    'music': Icons.music_note,
+    'movie': Icons.movie,
+    'food': Icons.restaurant,
+    'health': Icons.health_and_safety,
+    'shopping': Icons.shopping_bag,
+    'fitness': Icons.fitness_center,
+  };
+  return map[name] ?? Icons.bookmarks_outlined;
 }

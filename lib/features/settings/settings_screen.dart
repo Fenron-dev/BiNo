@@ -8,15 +8,18 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Container;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/di.dart';
+import '../../data/db/database.dart';
 import '../../services/ai_enrich_service.dart';
 import '../../services/ai_settings_service.dart';
 import '../../services/backup_service.dart';
 import '../../services/theme_service.dart';
+import '../hubs/hub_form_sheet.dart';
+import '../hubs/hub_provider.dart';
 
 /// Einstellungen-Screen mit Backup/Restore-Funktion.
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -285,6 +288,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             enabled: !_isExporting && !_isImporting,
             onTap: _importBackup,
           ),
+
+          const Divider(),
+
+          // ── Hub-Tabs ──────────────────────────────────────────────────
+          _SectionHeader(title: 'Hub-Tabs'),
+          _HubTabsManager(),
 
           const Divider(),
 
@@ -604,6 +613,112 @@ class _ThemeSelector extends ConsumerWidget {
         }).toList(),
       ),
     );
+  }
+}
+
+// ── Hub-Tab-Verwaltung ─────────────────────────────────────────────────────────
+
+/// Listet alle Hub-Tabs auf und erlaubt Erstellen, Bearbeiten und Löschen.
+class _HubTabsManager extends ConsumerWidget {
+  const _HubTabsManager();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hubsAsync = ref.watch(hubTabsProvider);
+
+    return hubsAsync.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      ),
+      error: (_, __) => const ListTile(
+        leading: Icon(Icons.error_outline),
+        title: Text('Fehler beim Laden der Hub-Tabs'),
+      ),
+      data: (hubs) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (hubs.isEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Text(
+                'Noch keine Hub-Tabs. Erstelle einen gefilterten Tab für Tags, '
+                'Typen oder Status.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
+          ...hubs.map(
+            (hub) => ListTile(
+              leading: const Icon(Icons.bookmarks_outlined),
+              title: Text(hub.name),
+              subtitle: hub.filterJson != null ? const Text('Gefiltert') : null,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    tooltip: 'Bearbeiten',
+                    onPressed: () => showHubFormSheet(context, existing: hub),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Löschen',
+                    onPressed: () =>
+                        _confirmDelete(context, ref, hub),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.add_circle_outline),
+            title: const Text('Neuen Hub-Tab erstellen'),
+            onTap: () => showHubFormSheet(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    Container hub,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hub-Tab löschen?'),
+        content: Text(
+          '„${hub.name}" wird unwiderruflich entfernt.\n'
+          'Einträge bleiben erhalten.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Löschen'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await ref.read(containerDaoProvider).archiveContainer(hub.id);
+    }
   }
 }
 

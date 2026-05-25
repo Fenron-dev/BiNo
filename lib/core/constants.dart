@@ -42,4 +42,8 @@ abstract class AppRoutes {
   // Container-Detail: erreichbar aus Projekte- und Bereiche-Branch.
   // Vollpfad: /container/detail/:id
   static String containerDetail(String id) => '/container/detail/$id';
+
+  // Hub-Eintrag-Detail: Top-Level-Route (ohne Shell), für Navigation aus Hub-Tabs.
+  // Vollpfad: /entry/:id
+  static String hubEntryDetail(String id) => '/entry/$id';
 }

@@ -249,7 +249,12 @@ class _EntryView extends ConsumerWidget {
             tooltip: 'Bearbeiten',
             onPressed: isActing
                 ? null
-                : () => context.push('/feed/detail/${entry.id}/edit'),
+                : () {
+                    // Pfad relativ zur aktuellen Route – funktioniert für
+                    // /feed/detail/:id/edit und /entry/:id/edit gleichermaßen.
+                    final base = GoRouterState.of(context).uri.path;
+                    context.push('$base/edit');
+                  },
           ),
           // Pin / Unpin
           IconButton(

@@ -9,6 +9,7 @@
 import 'package:drift/drift.dart';
 import '../database.dart';
 import '../tables/entries.dart';
+import '../../../domain/filters/filter_definition.dart';
 
 // Der `part`-Direktive verweist auf die von drift_dev generierte Datei,
 // die den _$EntryDaoMixin mit allen Tabellen-Accessoren enthält.
@@ -168,6 +169,62 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
             )
             ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]))
           .get();
+
+  /// Beobachtet Einträge, die der gegebenen Hub-Filter-Definition entsprechen.
+  ///
+  /// Kombiniert dynamisch WHERE-Bedingungen für Typ, Status und Tag-Filter.
+  /// Bei gesetzten tagsAny wird ein JOIN auf entry_tags + tags ausgeführt;
+  /// DISTINCT verhindert doppelte Einträge wenn ein Eintrag mehrere der
+  /// gesuchten Tags hat.
+  Stream<List<Entry>> watchEntriesForFilter(
+    FilterDefinition filter,
+    String workspaceId,
+  ) {
+    final db = attachedDatabase;
+
+    final conditions = <String>[];
+    final vars = <Variable>[];
+
+    String fromClause = 'entries e';
+
+    if (filter.tagsAny.isNotEmpty) {
+      fromClause =
+          'entries e JOIN entry_tags et ON et.entry_id = e.id JOIN tags t ON t.id = et.tag_id';
+      final ph = List.filled(filter.tagsAny.length, '?').join(', ');
+      conditions.add('t.name IN ($ph)');
+      vars.addAll(filter.tagsAny.map(Variable.withString));
+    }
+
+    conditions.add('e.workspace_id = ?');
+    vars.add(Variable.withString(workspaceId));
+
+    if (filter.typeIn.isNotEmpty) {
+      final ph = List.filled(filter.typeIn.length, '?').join(', ');
+      conditions.add('e.type IN ($ph)');
+      vars.addAll(filter.typeIn.map(Variable.withString));
+    }
+
+    if (filter.statusIn.isNotEmpty) {
+      final ph = List.filled(filter.statusIn.length, '?').join(', ');
+      conditions.add('e.status IN ($ph)');
+      vars.addAll(filter.statusIn.map(Variable.withString));
+    }
+
+    final distinct = filter.tagsAny.isNotEmpty ? 'DISTINCT ' : '';
+    final where = conditions.isEmpty ? '' : 'WHERE ${conditions.join(' AND ')}';
+    final sql =
+        'SELECT ${distinct}e.* FROM $fromClause $where ORDER BY e.pinned DESC, e.created_at ASC';
+
+    final readsTables = <ResultSetImplementation<dynamic, dynamic>>[entries];
+    if (filter.tagsAny.isNotEmpty) {
+      readsTables.add(db.entryTags);
+      readsTables.add(db.tags);
+    }
+
+    return customSelect(sql, variables: vars, readsFrom: readsTables.toSet())
+        .watch()
+        .map((rows) => rows.map((row) => entries.map(row.data)).toList());
+  }
 
   /// Gibt die neuesten Einträge zurück (für den Wikilink-Picker).
   /// Zeigt sowohl Einträge mit als auch ohne Titel, damit alle verlinkt

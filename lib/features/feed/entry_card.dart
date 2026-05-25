@@ -24,7 +24,11 @@ import '../../data/db/database.dart' hide Container;
 class EntryCard extends ConsumerWidget {
   final Entry entry;
 
-  const EntryCard({super.key, required this.entry});
+  /// Optionale Route für den Detail-Screen. Standardmäßig /feed/detail/:id.
+  /// Hub-Tabs übergeben /entry/:id für die Top-Level-Route (ohne Shell).
+  final String? detailRoute;
+
+  const EntryCard({super.key, required this.entry, this.detailRoute});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -39,7 +43,7 @@ class EntryCard extends ConsumerWidget {
     return Card(
       color: colorScheme.surfaceContainerLow,
       child: InkWell(
-        onTap: () => context.push(AppRoutes.entryDetail(entry.id)),
+        onTap: () => context.push(detailRoute ?? AppRoutes.entryDetail(entry.id)),
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(12),

@@ -43,6 +43,16 @@ class ContainerDao extends DatabaseAccessor<AppDatabase>
             ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
           .watch();
 
+  /// Beobachtet alle Hub-Tabs sortiert nach sortOrder (für die Bottom-Nav).
+  Stream<List<Container>> watchHubTabs() =>
+      (select(containers)
+            ..where(
+              (t) =>
+                  t.kind.equals('hub') & t.archived.equals(false),
+            )
+            ..orderBy([(t) => OrderingTerm.asc(t.sortOrder)]))
+          .watch();
+
   /// Beobachtet Einträge eines Containers.
   ///
   /// WARUM asyncMap statt direkter Join?
@@ -103,6 +113,31 @@ class ContainerDao extends DatabaseAccessor<AppDatabase>
           icon: Value(icon),
           color: Value(color),
         ),
+      );
+
+  /// Aktualisiert alle editierbaren Felder inkl. filterJson (für Hub-Tabs).
+  Future<void> updateContainerFull({
+    required String id,
+    required String name,
+    String? description,
+    required String icon,
+    required String color,
+    String? filterJson,
+  }) =>
+      (update(containers)..where((t) => t.id.equals(id))).write(
+        ContainersCompanion(
+          name: Value(name),
+          description: Value(description),
+          icon: Value(icon),
+          color: Value(color),
+          filterJson: Value(filterJson),
+        ),
+      );
+
+  /// Aktualisiert die sortOrder eines einzelnen Containers (Drag-and-Drop).
+  Future<void> updateSortOrder(String id, int sortOrder) =>
+      (update(containers)..where((t) => t.id.equals(id))).write(
+        ContainersCompanion(sortOrder: Value(sortOrder)),
       );
 
   /// Archiviert einen Container (Soft-Delete).
