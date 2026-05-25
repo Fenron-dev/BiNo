@@ -13,6 +13,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Pflicht für flutter_local_notifications (nutzt Java-8-Time-API via Desugaring).
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -44,4 +46,10 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Desugar-Bibliothek: ermöglicht Java-8-APIs (java.time.*) auf Android < API 26.
+    // Wird von flutter_local_notifications für zonedSchedule benötigt.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
