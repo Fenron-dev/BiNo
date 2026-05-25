@@ -4,6 +4,8 @@
 // ABHÄNGIGKEITEN: entryRepositoryProvider aus di.dart, Entry-Typ aus Drift.
 // PHASE: 1 – Grundgerüst.
 
+import 'dart:math' show Random;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/di.dart';
@@ -40,6 +42,22 @@ final searchResultsProvider = FutureProvider.autoDispose
 /// Einträge vom selben Kalender-Tag in vergangenen Jahren (max. 5 Jahre zurück).
 /// Typ: Liste aus (Jahre-zurück, Einträge-dieses-Tages).
 typedef OnThisDayData = List<({int yearsAgo, List<Entry> entries})>;
+
+// ── Zufälliger Eintrag ────────────────────────────────────────────────────
+
+/// Wählt einmalig pro App-Session einen zufälligen Eintrag aus dem aktiven Workspace.
+///
+/// WARUM FutureProvider ohne autoDispose?
+/// Die Zufallsauswahl soll pro Session stabil bleiben – kein Neuziehen bei
+/// jedem Widget-Rebuild. Ein autoDispose-Provider würde nach jedem Dispose
+/// einen neuen Eintrag ziehen.
+final randomEntryProvider = FutureProvider<Entry?>((ref) async {
+  final workspaceId = ref.watch(activeWorkspaceProvider);
+  final dao = ref.read(entryDaoProvider);
+  final all = await dao.getRecentEntries(workspaceId, limit: 500);
+  if (all.isEmpty) return null;
+  return all[Random().nextInt(all.length)];
+}, name: 'randomEntryProvider');
 
 final onThisDayProvider = FutureProvider<OnThisDayData>((ref) async {
   final dao = ref.read(entryDaoProvider);

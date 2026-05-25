@@ -1,5 +1,6 @@
 package dev.fenron.bino_bit_notes
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// FlutterFragmentActivity statt FlutterActivity – Pflicht für local_auth (Biometrie).
+class MainActivity : FlutterFragmentActivity()

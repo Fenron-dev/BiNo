@@ -16,6 +16,7 @@ import '../../core/di.dart';
 import '../../data/db/database.dart';
 import '../../services/ai_enrich_service.dart';
 import '../../services/ai_settings_service.dart';
+import '../../services/app_lock_service.dart';
 import '../../services/backup_service.dart';
 import '../../services/theme_service.dart';
 import '../hubs/hub_form_sheet.dart';
@@ -548,6 +549,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           const Divider(),
 
+          // ── App-Sperre ─────────────────────────────────────────────────
+          _SectionHeader(title: 'Datenschutz'),
+          _AppLockTile(),
+
+          const Divider(),
+
           // ── Info ───────────────────────────────────────────────────────
           _SectionHeader(title: 'Info'),
 
@@ -719,6 +726,77 @@ class _HubTabsManager extends ConsumerWidget {
     if (confirmed == true) {
       await ref.read(containerDaoProvider).archiveContainer(hub.id);
     }
+  }
+}
+
+// ── App-Sperre ────────────────────────────────────────────────────────────────
+
+/// Toggle für die biometrische App-Sperre.
+///
+/// Aktivieren und Deaktivieren erfordert jeweils eine erfolgreiche Authentifizierung,
+/// damit niemand die Sperre ohne Berechtigung entfernen kann.
+class _AppLockTile extends ConsumerStatefulWidget {
+  const _AppLockTile();
+
+  @override
+  ConsumerState<_AppLockTile> createState() => _AppLockTileState();
+}
+
+class _AppLockTileState extends ConsumerState<_AppLockTile> {
+  bool _busy = false;
+
+  Future<void> _toggle(bool newValue) async {
+    if (_busy) return;
+
+    // Prüfen ob überhaupt Biometrie / Gerätesperre vorhanden ist.
+    final canAuth = await AppLockService.canAuthenticate();
+    if (!canAuth && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Keine Bildschirmsperre eingerichtet. Bitte zuerst PIN oder Biometrie einrichten.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _busy = true);
+
+    // Vor jeder Änderung authentifizieren.
+    final authenticated = await AppLockService.authenticate();
+    if (!authenticated) {
+      if (mounted) setState(() => _busy = false);
+      return;
+    }
+
+    await AppLockService.setEnabled(newValue);
+    ref.invalidate(appLockEnabledProvider);
+
+    if (mounted) {
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            newValue ? 'App-Sperre aktiviert.' : 'App-Sperre deaktiviert.',
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lockAsync = ref.watch(appLockEnabledProvider);
+    final enabled = lockAsync.value ?? false;
+
+    return SwitchListTile(
+      secondary: const Icon(Icons.lock_outline),
+      title: const Text('App-Sperre'),
+      subtitle: const Text('Biometrie oder PIN beim Öffnen verlangen'),
+      value: enabled,
+      onChanged: _busy ? null : _toggle,
+    );
   }
 }
 

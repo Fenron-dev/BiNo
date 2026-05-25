@@ -28,6 +28,7 @@ import '../services/ai_settings_service.dart';
 import '../services/attachment_service.dart';
 import '../services/backup_service.dart';
 import '../services/markdown_export_service.dart';
+import '../services/app_lock_service.dart';
 import '../services/theme_service.dart';
 import '../services/url_metadata_service.dart';
 
@@ -118,6 +119,12 @@ final markdownExportServiceProvider = Provider<MarkdownExportService>((ref) {
 final themeServiceProvider = Provider<ThemeService>((ref) {
   return ThemeService();
 }, name: 'themeServiceProvider');
+
+/// Gibt den aktuellen App-Lock-Aktivierungszustand als reaktiven Stream aus.
+/// Wird manuell invalidiert wenn der Nutzer die Einstellung ändert.
+final appLockEnabledProvider = FutureProvider<bool>((ref) {
+  return AppLockService.isEnabled();
+}, name: 'appLockEnabledProvider');
 
 /// Aktiver Theme-Modus. Initialwert wird in main() via ProviderScope.overrides
 /// aus der persistierten Einstellung geladen, um Flicker beim Start zu vermeiden.

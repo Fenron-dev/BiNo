@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/di.dart';
 import 'core/theme.dart';
 import 'core/router.dart';
+import 'features/lock/app_lock_guard.dart';
 import 'features/share_intent/share_intent_handler.dart';
 import 'services/theme_service.dart';
 
@@ -34,14 +35,16 @@ class BiNoApp extends ConsumerWidget {
       _ => (ThemeMode.system, AppTheme.darkTheme), // kSystem + Fallback
     };
 
-    return ShareIntentHandler(
-      child: MaterialApp.router(
-        title: 'BiNo',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme,
-        darkTheme: effectiveDarkTheme,
-        themeMode: flutterThemeMode,
-        routerConfig: router,
+    return AppLockGuard(
+      child: ShareIntentHandler(
+        child: MaterialApp.router(
+          title: 'BiNo',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          darkTheme: effectiveDarkTheme,
+          themeMode: flutterThemeMode,
+          routerConfig: router,
+        ),
       ),
     );
   }

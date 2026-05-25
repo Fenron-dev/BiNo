@@ -174,6 +174,7 @@ class _FeedView extends ConsumerStatefulWidget {
 class _FeedViewState extends ConsumerState<_FeedView> {
   String? _activeFilter;
   bool _dismissedOnThisDay = false;
+  bool _dismissedRandomCard = false;
 
   static const _kFilters = <(String, String, IconData)>[
     ('text', 'Text', Icons.text_fields_outlined),
@@ -195,6 +196,12 @@ class _FeedViewState extends ConsumerState<_FeedView> {
 
     return Column(
       children: [
+        // Zufälliger Eintrag (erscheint einmalig pro Session, schließbar)
+        if (!_dismissedRandomCard)
+          _RandomCardBanner(
+            onDismiss: () => setState(() => _dismissedRandomCard = true),
+          ),
+
         // „Heute vor …"-Banner (erscheint einmalig pro Session, schließbar)
         if (!_dismissedOnThisDay)
           _OnThisDayBanner(
@@ -337,6 +344,86 @@ class _SwipableEntryCard extends ConsumerWidget {
         ref.read(entryRepositoryProvider).deleteEntry(entry.id);
       },
       child: EntryCard(entry: entry),
+    );
+  }
+}
+
+// ── Zufälliger Eintrag ────────────────────────────────────────────────────────
+
+class _RandomCardBanner extends ConsumerWidget {
+  final VoidCallback onDismiss;
+
+  const _RandomCardBanner({required this.onDismiss});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(randomEntryProvider);
+
+    return async.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (entry) {
+        if (entry == null) return const SizedBox.shrink();
+
+        final theme = Theme.of(context);
+        final preview = (entry.title?.isNotEmpty == true
+                ? entry.title!
+                : entry.body)
+            .substring(
+              0,
+              (entry.title?.isNotEmpty == true ? entry.title! : entry.body)
+                  .length
+                  .clamp(0, 120),
+            );
+
+        return InkWell(
+          onTap: () => context.push(AppRoutes.entryDetail(entry.id)),
+          child: ColoredBox(
+            color: theme.colorScheme.tertiaryContainer.withAlpha(80),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 4, 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.shuffle_outlined,
+                    size: 16,
+                    color: theme.colorScheme.tertiary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Zufälliger Eintrag',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.tertiary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          preview,
+                          style: theme.textTheme.bodySmall,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    visualDensity: VisualDensity.compact,
+                    color: theme.colorScheme.onSurfaceVariant,
+                    onPressed: onDismiss,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
