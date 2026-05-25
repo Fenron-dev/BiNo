@@ -35,16 +35,18 @@ class BiNoApp extends ConsumerWidget {
       _ => (ThemeMode.system, AppTheme.darkTheme), // kSystem + Fallback
     };
 
-    return AppLockGuard(
-      child: ShareIntentHandler(
-        child: MaterialApp.router(
-          title: 'BiNo',
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.lightTheme,
-          darkTheme: effectiveDarkTheme,
-          themeMode: flutterThemeMode,
-          routerConfig: router,
-        ),
+    return ShareIntentHandler(
+      child: MaterialApp.router(
+        title: 'BiNo',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        darkTheme: effectiveDarkTheme,
+        themeMode: flutterThemeMode,
+        routerConfig: router,
+        // AppLockGuard MUSS innerhalb von MaterialApp stehen, damit Theme,
+        // MediaQuery, SafeArea und Material-Buttons korrekt funktionieren.
+        builder: (context, child) =>
+            AppLockGuard(child: child ?? const SizedBox.shrink()),
       ),
     );
   }

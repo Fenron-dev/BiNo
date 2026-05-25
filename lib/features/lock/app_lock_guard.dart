@@ -2,26 +2,28 @@
 //
 // ZWECK: Überwacht den App-Lifecycle und legt bei aktivierter Sperre
 //        einen undurchsichtigen Sperrschirm über den Inhalt.
-//        Beim Aufrufen der Authentifizierung (Biometrie/PIN) wird der
-//        Schirm nach Erfolg entfernt.
+//        WICHTIG: AppLockGuard muss innerhalb von MaterialApp eingebunden
+//        werden (via builder-Parameter), damit Theme, SafeArea und
+//        Material-Buttons korrekt funktionieren.
 // ABHÄNGIGKEITEN: AppLockService, WidgetsBindingObserver.
 // PHASE: 6 – App-Lock.
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/app_lock_service.dart';
 
-class AppLockGuard extends ConsumerStatefulWidget {
+// Kein ConsumerStatefulWidget – AppLockService nutzt nur statische Methoden,
+// Riverpod wird hier nicht benötigt.
+class AppLockGuard extends StatefulWidget {
   final Widget child;
 
   const AppLockGuard({super.key, required this.child});
 
   @override
-  ConsumerState<AppLockGuard> createState() => _AppLockGuardState();
+  State<AppLockGuard> createState() => _AppLockGuardState();
 }
 
-class _AppLockGuardState extends ConsumerState<AppLockGuard>
+class _AppLockGuardState extends State<AppLockGuard>
     with WidgetsBindingObserver {
   bool _locked = false;
   bool _authInProgress = false;
@@ -49,7 +51,6 @@ class _AppLockGuardState extends ConsumerState<AppLockGuard>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
-      // Bei Hintergrund-Wechsel sofort sperren (Vorschau im Task-Switcher verbergen).
       _lockIfEnabled();
     } else if (state == AppLifecycleState.resumed && _locked && !_authInProgress) {
       _authenticate();
