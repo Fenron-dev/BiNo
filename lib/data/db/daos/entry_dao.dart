@@ -253,4 +253,17 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
       ),
     );
   }
+
+  /// Setzt oder löscht den Erinnerungszeitpunkt eines Eintrags.
+  ///
+  /// [reminderAt] = null entfernt eine bestehende Erinnerung (Alarm bleibt
+  /// Aufgabe des Aufrufers – dieser muss auch NotificationService.cancelReminder
+  /// aufrufen).
+  Future<void> setReminderAt(String id, DateTime? reminderAt) =>
+      (update(entries)..where((t) => t.id.equals(id))).write(
+        EntriesCompanion(
+          reminderAt: Value(reminderAt),
+          updatedAt: Value(DateTime.now().toUtc()),
+        ),
+      );
 }

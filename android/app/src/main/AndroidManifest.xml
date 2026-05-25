@@ -22,6 +22,13 @@
     <!-- Benachrichtigungen (Android 13+): für Erinnerungen und Wochen-Rückblick (Phase 6) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
+    <!-- Exakte Alarme (Android 12+, API 31+): für minutengenaue Erinnerungen.
+         Ab Android 14 muss der Nutzer dies in den Systemeinstellungen gewähren. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+
+    <!-- Benachrichtigungen nach Neustart neu einplanen -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
     <!-- Biometrie: für App-Lock (Phase 6) -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
 
@@ -84,6 +91,23 @@
             </intent-filter>
 
         </activity>
+
+        <!-- flutter_local_notifications: BroadcastReceiver für geplante Alarme -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"/>
+
+        <!-- flutter_local_notifications: Benachrichtigungen nach Gerät-Neustart neu einplanen -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
 
         <!-- Flutter-Embedding-Metadaten -->
         <meta-data

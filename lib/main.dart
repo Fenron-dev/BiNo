@@ -5,6 +5,8 @@
 // ABHÄNGIGKEITEN: flutter_riverpod (ProviderScope), app.dart (BiNoApp).
 // PHASE: 1 – Grundgerüst.
 
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -13,6 +15,7 @@ import 'package:metadata_god/metadata_god.dart';
 
 import 'app.dart';
 import 'core/di.dart';
+import 'services/notification_service.dart';
 import 'services/theme_service.dart';
 
 void main() async {
@@ -32,6 +35,15 @@ void main() async {
   // Lokalisierungsdaten für DateFormat('de_DE') laden – ohne diesen Aufruf
   // wirft DateFormat eine LocaleDataException zur Laufzeit.
   await initializeDateFormatting('de_DE');
+
+  // Benachrichtigungsdienst initialisieren (Zeitzone + Kanäle).
+  // Muss vor dem ersten Frame abgeschlossen sein, damit Erinnerungen bei
+  // App-Start sofort eingeplant werden können.
+  await NotificationService.initialize();
+  // Wöchentlichen Rückblick einmalig (wieder-)einplanen.
+  // zonedSchedule mit matchDateTimeComponents ist idempotent – ein Doppelaufruf
+  // überschreibt die bestehende Planung ohne eine zweite Benachrichtigung zu erzeugen.
+  unawaited(NotificationService.scheduleWeeklyDigest());
 
   // Theme vor dem ersten Frame laden, damit kein Flicker zwischen System-
   // Default und Nutzereinstellung auftritt.

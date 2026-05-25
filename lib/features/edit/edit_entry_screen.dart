@@ -16,10 +16,13 @@ import 'package:uuid/uuid.dart';
 
 import 'package:drift/drift.dart' show Value;
 
+import 'package:intl/intl.dart';
+
 import '../../core/di.dart';
 import '../../data/db/database.dart';
 import '../../data/db/daos/container_dao.dart';
 import '../../data/db/tables/property_definitions.dart';
+import '../../services/notification_service.dart';
 import '../containers/container_form_sheet.dart';
 
 // ── Provider ─────────────────────────────────────────────────────────────────
@@ -54,6 +57,7 @@ class _EditEntryScreenState extends ConsumerState<EditEntryScreen> {
   final _titleCtrl = TextEditingController();
   final _bodyCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
+  DateTime? _reminderAt;
   bool _initialized = false;
   bool _isSaving = false;
 
@@ -70,6 +74,7 @@ class _EditEntryScreenState extends ConsumerState<EditEntryScreen> {
     _titleCtrl.text = entry.title ?? '';
     _bodyCtrl.text = entry.body;
     _notesCtrl.text = entry.notes ?? '';
+    _reminderAt = entry.reminderAt;
     _initialized = true;
   }
 
@@ -111,6 +116,7 @@ class _EditEntryScreenState extends ConsumerState<EditEntryScreen> {
           titleCtrl: _titleCtrl,
           bodyCtrl: _bodyCtrl,
           notesCtrl: _notesCtrl,
+          reminderAt: _reminderAt,
           isSaving: _isSaving,
           onSave: _save,
         );
@@ -126,6 +132,7 @@ class _EditView extends ConsumerWidget {
   final TextEditingController titleCtrl;
   final TextEditingController bodyCtrl;
   final TextEditingController notesCtrl;
+  final DateTime? reminderAt;
   final bool isSaving;
   final VoidCallback onSave;
 
@@ -134,6 +141,7 @@ class _EditView extends ConsumerWidget {
     required this.titleCtrl,
     required this.bodyCtrl,
     required this.notesCtrl,
+    required this.reminderAt,
     required this.isSaving,
     required this.onSave,
   });
@@ -211,6 +219,16 @@ class _EditView extends ConsumerWidget {
 
           // ── Container-Zuweisung (Projekte / Bereiche) ──────────────────────
           _ContainersSection(entryId: entryId),
+
+          const SizedBox(height: 16),
+          const Divider(),
+          const SizedBox(height: 8),
+
+          // ── Erinnerung ─────────────────────────────────────────────────────
+          _ReminderSection(
+            entryId: entryId,
+            initialReminderAt: reminderAt,
+          ),
 
           const SizedBox(height: 16),
           const Divider(),
@@ -300,6 +318,145 @@ class _NotesSectionState extends State<_NotesSection> {
               textCapitalization: TextCapitalization.sentences,
               keyboardType: TextInputType.multiline,
             ),
+          ),
+      ],
+    );
+  }
+}
+
+// ── Erinnerungs-Sektion ──────────────────────────────────────────────────────
+
+/// Zeigt den aktuellen Erinnerungszeitpunkt und ermöglicht Setzen / Löschen.
+///
+/// Schreibt sofort in die DB (kein "Speichern" nötig) und plant/cancelt
+/// den Alarm via NotificationService.
+class _ReminderSection extends ConsumerStatefulWidget {
+  final String entryId;
+  final DateTime? initialReminderAt;
+
+  const _ReminderSection({
+    required this.entryId,
+    this.initialReminderAt,
+  });
+
+  @override
+  ConsumerState<_ReminderSection> createState() => _ReminderSectionState();
+}
+
+class _ReminderSectionState extends ConsumerState<_ReminderSection> {
+  late DateTime? _reminderAt;
+
+  static final _dateFmt = DateFormat('dd.MM.yyyy – HH:mm', 'de_DE');
+
+  @override
+  void initState() {
+    super.initState();
+    _reminderAt = widget.initialReminderAt;
+  }
+
+  Future<void> _pick() async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _reminderAt ?? now.add(const Duration(hours: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365 * 5)),
+    );
+    if (date == null || !mounted) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(
+        _reminderAt ?? now.add(const Duration(hours: 1)),
+      ),
+    );
+    if (time == null || !mounted) return;
+
+    final dt = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+
+    // Erinnerung in der Vergangenheit ablehnen.
+    if (dt.isBefore(DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erinnerungszeit liegt in der Vergangenheit.')),
+      );
+      return;
+    }
+
+    // Notification-Berechtigung prüfen / anfragen.
+    final granted = await NotificationService.requestPermission();
+    if (!granted && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Benachrichtigungsberechtigung verweigert. Bitte in den Einstellungen aktivieren.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _reminderAt = dt);
+
+    // DB + Alarm gleichzeitig aktualisieren.
+    await ref.read(entryRepositoryProvider).setReminderAt(widget.entryId, dt);
+    await NotificationService.scheduleReminder(
+      entryId: widget.entryId,
+      body: _reminderAt != null ? 'Erinnerung für deinen Eintrag' : '',
+      scheduledAt: dt,
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erinnerung gesetzt: ${_dateFmt.format(dt)}')),
+      );
+    }
+  }
+
+  Future<void> _clear() async {
+    setState(() => _reminderAt = null);
+    await ref.read(entryRepositoryProvider).setReminderAt(widget.entryId, null);
+    await NotificationService.cancelReminder(widget.entryId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Row(
+      children: [
+        Icon(
+          _reminderAt != null ? Icons.alarm_on : Icons.alarm_add_outlined,
+          size: 16,
+          color: _reminderAt != null
+              ? colorScheme.primary
+              : colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: InkWell(
+            onTap: _pick,
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Text(
+                _reminderAt != null
+                    ? _dateFmt.format(_reminderAt!.toLocal())
+                    : 'Erinnerung setzen...',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: _reminderAt != null
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (_reminderAt != null)
+          IconButton(
+            icon: const Icon(Icons.close, size: 16),
+            color: colorScheme.onSurfaceVariant,
+            tooltip: 'Erinnerung löschen',
+            visualDensity: VisualDensity.compact,
+            onPressed: _clear,
           ),
       ],
     );

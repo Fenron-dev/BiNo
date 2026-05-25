@@ -137,6 +137,11 @@ class EntryRepository {
   /// Schaltet den Pinned-Status eines Eintrags um.
   Future<void> togglePin(String id) => _entryDao.togglePin(id);
 
+  /// Setzt oder löscht den Erinnerungszeitpunkt. Notification-Scheduling ist
+  /// Aufgabe des Aufrufers (UI-Schicht via NotificationService).
+  Future<void> setReminderAt(String id, DateTime? reminderAt) =>
+      _entryDao.setReminderAt(id, reminderAt);
+
   /// Durchsucht Einträge via FTS5-Volltext-Index.
   Future<List<Entry>> searchEntries(String query) =>
       _entryDao.searchEntries(query);
