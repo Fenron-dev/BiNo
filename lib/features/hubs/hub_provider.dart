@@ -16,24 +16,25 @@ final hubTabsProvider = StreamProvider<List<Container>>((ref) {
 
 /// Liefert die gefilterten Einträge für einen Hub-Tab (identifiziert per Container-ID).
 ///
-/// Liest das filterJson aus dem Container, wandelt es in eine FilterDefinition
-/// um und gibt den reaktiven Entry-Stream zurück.
+/// REAKTIVITÄT: Liest den Hub aus hubTabsProvider (reaktiver Stream) statt
+/// per einmaligem getContainerById. Wenn filterJson in der DB geändert wird,
+/// emittiert hubTabsProvider sofort einen neuen Wert → dieser Provider baut
+/// watchEntriesForFilter mit dem neuen Filter neu auf.
 final hubEntriesProvider =
-    StreamProvider.family<List<Entry>, String>((ref, containerId) async* {
-  final dao = ref.watch(containerDaoProvider);
-  final container = await dao.getContainerById(containerId);
-  if (container == null) {
-    yield [];
-    return;
-  }
+    StreamProvider.family<List<Entry>, String>((ref, containerId) {
+  // Reaktive Hub-Daten aus dem laufenden watchHubTabs()-Stream.
+  final hubsAsync = ref.watch(hubTabsProvider);
+  final hub = hubsAsync.value?.where((h) => h.id == containerId).firstOrNull;
 
-  final filter = container.filterJson != null
-      ? FilterDefinition.fromJsonString(container.filterJson!)
+  if (hub == null) return Stream.value(<Entry>[]);
+
+  final filter = hub.filterJson != null
+      ? FilterDefinition.fromJsonString(hub.filterJson!)
       : const FilterDefinition();
 
   final workspaceId = ref.watch(activeWorkspaceProvider);
 
-  yield* ref
+  return ref
       .watch(entryDaoProvider)
       .watchEntriesForFilter(filter, workspaceId);
 }, name: 'hubEntriesProvider');

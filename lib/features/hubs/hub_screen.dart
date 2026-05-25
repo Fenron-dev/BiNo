@@ -11,7 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants.dart';
 import '../../data/db/database.dart';
 import '../feed/entry_card.dart';
-import 'hub_form_sheet.dart';
+import 'hub_form_sheet.dart' show showHubFormSheet, kHubIconMap;
 import 'hub_provider.dart';
 
 /// Zeigt die gefilterten Einträge eines Hub-Tabs.
@@ -140,36 +140,4 @@ Color _hexToColor(String hex, Color fallback) {
   }
 }
 
-IconData _iconData(String name) {
-  return _kIconMap[name] ?? Icons.bookmarks_outlined;
-}
-
-const _kIconMap = <String, IconData>{
-  'bookmark': Icons.bookmark,
-  'bookmarks': Icons.bookmarks,
-  'menu_book': Icons.menu_book,
-  'label': Icons.label,
-  'star': Icons.star,
-  'favorite': Icons.favorite,
-  'link': Icons.link,
-  'image': Icons.image,
-  'mic': Icons.mic,
-  'note': Icons.note,
-  'task': Icons.task_alt,
-  'inbox': Icons.inbox,
-  'archive': Icons.archive,
-  'folder': Icons.folder,
-  'work': Icons.work,
-  'home': Icons.home,
-  'school': Icons.school,
-  'fitness': Icons.fitness_center,
-  'music': Icons.music_note,
-  'movie': Icons.movie,
-  'shopping': Icons.shopping_bag,
-  'code': Icons.code,
-  'travel': Icons.flight,
-  'food': Icons.restaurant,
-  'health': Icons.health_and_safety,
-  'idea': Icons.lightbulb,
-  'todo': Icons.checklist,
-};
+IconData _iconData(String name) => kHubIconMap[name] ?? Icons.bookmarks_outlined;

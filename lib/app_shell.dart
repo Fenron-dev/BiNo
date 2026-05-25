@@ -1,11 +1,12 @@
 // Datei: lib/app_shell.dart
 //
 // ZWECK: Persistente App-Hülle mit BottomAppBar (Navigation) und zentralem FAB.
-//        Zeigt Hub-Tabs als zusätzliche Nav-Items rechts neben Bereiche.
-//        Wenn ein Hub aktiv ist, wird HubScreen statt des NavigationShell-Inhalts
-//        gerendert (lokaler State-Swap ohne go_router-Branch-Wechsel).
+//        Hub-Tabs werden über einen einzigen „Hubs"-Button geöffnet (verhindert
+//        Overflow), der ein Auswahl-Sheet mit allen Hubs zeigt.
+//        Aktiver Hub-Inhalt wird via lokalem _activeHubId-State in der Shell
+//        gerendert (kein go_router-Branch-Wechsel nötig).
 // ABHÄNGIGKEITEN: go_router (StatefulNavigationShell), CaptureSheet,
-//                 AudioCaptureSheet, hubTabsProvider, HubScreen.
+//                 AudioCaptureSheet, hubTabsProvider, HubScreen, HubFormSheet.
 
 import 'package:flutter/material.dart' hide Container;
 import 'package:flutter/services.dart';
@@ -20,16 +21,11 @@ import 'data/db/database.dart';
 import 'features/capture/capture_sheet.dart';
 import 'features/capture/audio_capture_sheet.dart';
 import 'features/containers/container_form_sheet.dart';
+import 'domain/filters/filter_definition.dart';
 import 'features/hubs/hub_provider.dart';
 import 'features/hubs/hub_screen.dart';
+import 'features/hubs/hub_form_sheet.dart';
 
-/// App-Hülle mit persistenter Bottom-Navigation, FAB und dynamischen Hub-Tabs.
-///
-/// Hub-Tab-Navigation nutzt lokalen State (_activeHubId) statt go_router-Branches,
-/// da StatefulShellRoute statische Branches erfordert.
-/// Wenn _activeHubId gesetzt ist, rendert body den HubScreen direkt.
-/// Top-Level-Routen (entry-Detail, Settings) liegen über der Shell und
-/// funktionieren unabhängig davon, ob ein Hub oder ein Standard-Tab aktiv ist.
 class AppShell extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
 
@@ -47,12 +43,9 @@ class _AppShellState extends ConsumerState<AppShell> {
     setState(() => _activeHubId = null);
     widget.navigationShell.goBranch(
       index,
-      initialLocation: index == widget.navigationShell.currentIndex && _activeHubId == null,
+      initialLocation:
+          index == widget.navigationShell.currentIndex && _activeHubId == null,
     );
-  }
-
-  void _onHubTabTapped(String hubId) {
-    setState(() => _activeHubId = hubId);
   }
 
   void _openCaptureSheet() {
@@ -114,16 +107,37 @@ class _AppShellState extends ConsumerState<AppShell> {
         );
   }
 
+  /// Öffnet das Hub-Auswahl-Sheet (oder direkt das Erstell-Formular wenn leer).
+  void _openHubSelector(List<Container> hubs) {
+    if (hubs.isEmpty) {
+      showHubFormSheet(context);
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (_) => _HubSelectorSheet(
+        hubs: hubs,
+        activeHubId: _activeHubId,
+        onHubSelected: (id) {
+          Navigator.of(context).pop();
+          setState(() => _activeHubId = id);
+        },
+        onCreateNew: () {
+          Navigator.of(context).pop();
+          showHubFormSheet(context);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final hubs = ref.watch(hubTabsProvider).value ?? [];
     final isOnFeedOrHub =
         _activeHubId != null || widget.navigationShell.currentIndex == 0;
-
-    // Hub-Tabs passen nur 2 Slots rechts neben Bereiche (insgesamt max 4 rechts vom FAB).
-    // Wenn mehr als 1 Hub existiert, wird der letzte Slot durch "Mehr"-Button ersetzt.
-    final visibleHubs = hubs.length <= 2 ? hubs : hubs.take(1).toList();
-    final hasOverflow = hubs.length > 2;
 
     return Scaffold(
       extendBody: true,
@@ -177,21 +191,15 @@ class _AppShellState extends ConsumerState<AppShell> {
               onTap: () => _onStandardTabTapped(2),
             ),
 
-            // Sichtbare Hub-Tabs (max 1–2)
-            for (final hub in visibleHubs)
-              _HubNavItem(
-                hub: hub,
-                isActive: _activeHubId == hub.id,
-                onTap: () => _onHubTabTapped(hub.id),
-              ),
-
-            // Overflow-Button wenn > 2 Hubs
-            if (hasOverflow)
-              _MoreHubsButton(
-                hubs: hubs,
-                activeHubId: _activeHubId,
-                onHubSelected: _onHubTabTapped,
-              ),
+            // Einzelner Hubs-Button – öffnet Auswahl-Sheet
+            _NavItem(
+              icon: Icons.bookmarks_outlined,
+              activeIcon: Icons.bookmarks,
+              label: 'Hubs',
+              isActive: _activeHubId != null,
+              badge: hubs.isNotEmpty ? hubs.length : null,
+              onTap: () => _openHubSelector(hubs),
+            ),
           ],
         ),
       ),
@@ -199,13 +207,120 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
 }
 
-// ── Standard-Nav-Item ──────────────────────────────────────────────────────────
+// ── Hub-Auswahl-Sheet ─────────────────────────────────────────────────────────
+
+class _HubSelectorSheet extends StatelessWidget {
+  final List<Container> hubs;
+  final String? activeHubId;
+  final ValueChanged<String> onHubSelected;
+  final VoidCallback onCreateNew;
+
+  const _HubSelectorSheet({
+    required this.hubs,
+    required this.activeHubId,
+    required this.onHubSelected,
+    required this.onCreateNew,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          // Handle
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: colorScheme.outlineVariant,
+              borderRadius: BorderRadius.circular(2),
+            ),
+            child: const SizedBox(width: 36, height: 4),
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: Row(
+              children: [
+                Text(
+                  'Hubs',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
+            ),
+          ),
+          ...hubs.map(
+            (hub) {
+              final isActive = hub.id == activeHubId;
+              Color hubColor;
+              try {
+                hubColor = Color(
+                  int.parse(
+                    'FF${hub.color.replaceFirst('#', '')}',
+                    radix: 16,
+                  ),
+                );
+              } catch (_) {
+                hubColor = colorScheme.primary;
+              }
+
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: hubColor.withValues(alpha: 0.18),
+                  child: Icon(_hubIconData(hub.icon), color: hubColor, size: 20),
+                ),
+                title: Text(hub.name),
+                subtitle: hub.filterJson != null
+                    ? Text(
+                        _filterSummary(hub.filterJson!),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      )
+                    : null,
+                trailing: isActive
+                    ? Icon(Icons.check_circle, color: colorScheme.primary)
+                    : null,
+                selected: isActive,
+                onTap: () => onHubSelected(hub.id),
+              );
+            },
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.add_circle_outline),
+            title: const Text('Neuen Hub erstellen'),
+            onTap: onCreateNew,
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  String _filterSummary(String filterJson) {
+    try {
+      final f = FilterDefinition.fromJsonString(filterJson);
+      final parts = <String>[];
+      if (f.tagsAny.isNotEmpty) parts.add('#${f.tagsAny.join(', #')}');
+      if (f.typeIn.isNotEmpty) parts.add(f.typeIn.join(', '));
+      if (f.statusIn.isNotEmpty) parts.add(f.statusIn.join(', '));
+      return parts.isEmpty ? 'Kein Filter' : parts.join(' · ');
+    } catch (_) {
+      return '';
+    }
+  }
+}
+
+// ── Nav-Item ──────────────────────────────────────────────────────────────────
 
 class _NavItem extends StatelessWidget {
   final IconData icon;
   final IconData activeIcon;
   final String label;
   final bool isActive;
+  final int? badge;
   final VoidCallback onTap;
 
   const _NavItem({
@@ -214,175 +329,33 @@ class _NavItem extends StatelessWidget {
     required this.label,
     required this.isActive,
     required this.onTap,
+    this.badge,
   });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final color =
+        isActive ? colorScheme.primary : colorScheme.onSurfaceVariant;
+
     return Expanded(
       child: InkWell(
         onTap: onTap,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              isActive ? activeIcon : icon,
-              color: isActive
-                  ? colorScheme.primary
-                  : colorScheme.onSurfaceVariant,
-            ),
+            badge != null
+                ? Badge(
+                    label: Text('$badge'),
+                    child: Icon(isActive ? activeIcon : icon, color: color),
+                  )
+                : Icon(isActive ? activeIcon : icon, color: color),
             Text(
               label,
-              style: TextStyle(
-                fontSize: 11,
-                color: isActive
-                    ? colorScheme.primary
-                    : colorScheme.onSurfaceVariant,
-              ),
+              style: TextStyle(fontSize: 11, color: color),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ── Hub-Nav-Item ───────────────────────────────────────────────────────────────
-
-class _HubNavItem extends StatelessWidget {
-  final Container hub;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  const _HubNavItem({
-    required this.hub,
-    required this.isActive,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    Color hubColor;
-    try {
-      hubColor = Color(
-        int.parse('FF${hub.color.replaceFirst('#', '')}', radix: 16),
-      );
-    } catch (_) {
-      hubColor = colorScheme.primary;
-    }
-
-    final iconData = _hubIconData(hub.icon);
-    final activeColor = isActive ? hubColor : colorScheme.onSurfaceVariant;
-
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(iconData, color: activeColor),
-            Text(
-              hub.name,
-              style: TextStyle(fontSize: 11, color: activeColor),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Overflow-Button für > 2 Hub-Tabs ─────────────────────────────────────────
-
-class _MoreHubsButton extends StatelessWidget {
-  final List<Container> hubs;
-  final String? activeHubId;
-  final ValueChanged<String> onHubSelected;
-
-  const _MoreHubsButton({
-    required this.hubs,
-    required this.activeHubId,
-    required this.onHubSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final hasActiveOverflow =
-        activeHubId != null && hubs.skip(1).any((h) => h.id == activeHubId);
-
-    return Expanded(
-      child: InkWell(
-        onTap: () => _showOverflowSheet(context),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.more_horiz,
-              color: hasActiveOverflow
-                  ? colorScheme.primary
-                  : colorScheme.onSurfaceVariant,
-            ),
-            Text(
-              'Mehr',
-              style: TextStyle(
-                fontSize: 11,
-                color: hasActiveOverflow
-                    ? colorScheme.primary
-                    : colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showOverflowSheet(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (_) => _HubOverflowSheet(
-        hubs: hubs,
-        activeHubId: activeHubId,
-        onHubSelected: (id) {
-          Navigator.of(context).pop();
-          onHubSelected(id);
-        },
-      ),
-    );
-  }
-}
-
-class _HubOverflowSheet extends StatelessWidget {
-  final List<Container> hubs;
-  final String? activeHubId;
-  final ValueChanged<String> onHubSelected;
-
-  const _HubOverflowSheet({
-    required this.hubs,
-    required this.activeHubId,
-    required this.onHubSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 8),
-          ...hubs.map(
-            (hub) => ListTile(
-              leading: Icon(_hubIconData(hub.icon)),
-              title: Text(hub.name),
-              selected: hub.id == activeHubId,
-              onTap: () => onHubSelected(hub.id),
-            ),
-          ),
-          const SizedBox(height: 8),
-        ],
       ),
     );
   }
@@ -390,34 +363,4 @@ class _HubOverflowSheet extends StatelessWidget {
 
 // ── Hilfsfunktion: Icon-Name → IconData ──────────────────────────────────────
 
-IconData _hubIconData(String name) {
-  const map = <String, IconData>{
-    'bookmark': Icons.bookmark,
-    'bookmarks': Icons.bookmarks,
-    'menu_book': Icons.menu_book,
-    'label': Icons.label,
-    'star': Icons.star,
-    'favorite': Icons.favorite,
-    'link': Icons.link,
-    'image': Icons.image,
-    'mic': Icons.mic,
-    'note': Icons.note,
-    'idea': Icons.lightbulb,
-    'todo': Icons.checklist,
-    'inbox': Icons.inbox,
-    'archive': Icons.archive,
-    'folder': Icons.folder,
-    'work': Icons.work,
-    'home': Icons.home,
-    'school': Icons.school,
-    'code': Icons.code,
-    'travel': Icons.flight,
-    'music': Icons.music_note,
-    'movie': Icons.movie,
-    'food': Icons.restaurant,
-    'health': Icons.health_and_safety,
-    'shopping': Icons.shopping_bag,
-    'fitness': Icons.fitness_center,
-  };
-  return map[name] ?? Icons.bookmarks_outlined;
-}
+IconData _hubIconData(String name) => kHubIconMap[name] ?? Icons.bookmarks_outlined;

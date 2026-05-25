@@ -315,7 +315,7 @@ class _IconPicker extends StatelessWidget {
     return Wrap(
       spacing: 6,
       runSpacing: 6,
-      children: _kIconOptions.map((entry) {
+      children: kHubIconOptions.map((entry) {
         final isSelected = selected == entry.$1;
         final colorScheme = Theme.of(context).colorScheme;
         return InkWell(
@@ -435,8 +435,8 @@ const _kStatuses = [
   ('archived', 'Archiviert'),
 ];
 
-// (name, iconData)
-const _kIconOptions = [
+// (name, iconData) – öffentlich, damit AppShell + HubScreen dieselbe Map nutzen.
+const kHubIconOptions = [
   ('bookmarks', Icons.bookmarks),
   ('bookmark', Icons.bookmark),
   ('menu_book', Icons.menu_book),
@@ -464,6 +464,36 @@ const _kIconOptions = [
   ('shopping', Icons.shopping_bag),
   ('fitness', Icons.fitness_center),
 ];
+
+/// Icon-Name → IconData Lookup für alle Hub-bezogenen Widgets.
+const kHubIconMap = <String, IconData>{
+  'bookmarks': Icons.bookmarks,
+  'bookmark': Icons.bookmark,
+  'menu_book': Icons.menu_book,
+  'label': Icons.label,
+  'star': Icons.star,
+  'favorite': Icons.favorite,
+  'link': Icons.link,
+  'image': Icons.image,
+  'mic': Icons.mic,
+  'note': Icons.note,
+  'idea': Icons.lightbulb,
+  'todo': Icons.checklist,
+  'inbox': Icons.inbox,
+  'archive': Icons.archive,
+  'folder': Icons.folder,
+  'work': Icons.work,
+  'home': Icons.home,
+  'school': Icons.school,
+  'code': Icons.code,
+  'travel': Icons.flight,
+  'music': Icons.music_note,
+  'movie': Icons.movie,
+  'food': Icons.restaurant,
+  'health': Icons.health_and_safety,
+  'shopping': Icons.shopping_bag,
+  'fitness': Icons.fitness_center,
+};
 
 const _kColorOptions = [
   '#6750A4', // Material Primary
