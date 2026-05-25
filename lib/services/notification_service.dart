@@ -33,8 +33,8 @@ class NotificationService {
 
     // IANA-Zeitzonen-Daten laden (benötigt für zonedSchedule).
     tz_data.initializeTimeZones();
-    final tzName = await FlutterTimezone.getLocalTimezone();
-    tz.setLocalLocation(tz.getLocation(tzName));
+    final tzInfo = await FlutterTimezone.getLocalTimezone();
+    tz.setLocalLocation(tz.getLocation(tzInfo.identifier));
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: android);
