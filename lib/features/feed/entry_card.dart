@@ -83,7 +83,7 @@ class EntryCard extends ConsumerWidget {
 
               const SizedBox(height: 8),
 
-              // Metadaten-Zeile: Link-Domain, Zeitstempel, Pin.
+              // Metadaten-Zeile: Link-Domain, Zeitstempel, Status, Pin.
               Row(
                 children: [
                   if (entry.sourceUrl != null)
@@ -95,8 +95,12 @@ class EntryCard extends ConsumerWidget {
                     ),
                   ),
                   const Spacer(),
-                  if (entry.pinned)
+                  if (entry.status != 'inbox')
+                    _StatusBadge(status: entry.status),
+                  if (entry.pinned) ...[
+                    if (entry.status != 'inbox') const SizedBox(width: 4),
                     Icon(Icons.push_pin, size: 14, color: colorScheme.primary),
+                  ],
                 ],
               ),
             ],
@@ -296,6 +300,64 @@ class _AudioChip extends StatelessWidget {
     final m = (total ~/ 60).toString().padLeft(2, '0');
     final s = (total % 60).toString().padLeft(2, '0');
     return '$m:$s';
+  }
+}
+
+/// Kleines Status-Label für Einträge mit Status != inbox.
+class _StatusBadge extends StatelessWidget {
+  final String status;
+
+  const _StatusBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final (icon, label, bg, fg) = switch (status) {
+      'active' => (
+          Icons.play_circle_outline,
+          'Aktiv',
+          cs.tertiaryContainer,
+          cs.onTertiaryContainer,
+        ),
+      'done' => (
+          Icons.check_circle_outline,
+          'Fertig',
+          cs.primaryContainer,
+          cs.onPrimaryContainer,
+        ),
+      'archived' => (
+          Icons.archive_outlined,
+          'Archiviert',
+          cs.surfaceContainerHighest,
+          cs.onSurfaceVariant,
+        ),
+      _ => (Icons.circle_outlined, status, cs.surfaceContainerHighest, cs.onSurfaceVariant),
+    };
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: fg),
+            const SizedBox(width: 3),
+            Text(
+              label,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: fg,
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

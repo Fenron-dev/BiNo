@@ -28,6 +28,7 @@ import '../services/ai_settings_service.dart';
 import '../services/attachment_service.dart';
 import '../services/backup_service.dart';
 import '../services/markdown_export_service.dart';
+import '../services/pdf_export_service.dart';
 import '../services/app_lock_service.dart';
 import '../services/theme_service.dart';
 import '../services/url_metadata_service.dart';
@@ -114,6 +115,11 @@ final aiEnrichServiceProvider = Provider<AiEnrichService>((ref) {
 final markdownExportServiceProvider = Provider<MarkdownExportService>((ref) {
   return MarkdownExportService();
 }, name: 'markdownExportServiceProvider');
+
+/// PdfExportService: erstellt ein PDF aus einem Eintrag und öffnet das Share-Sheet.
+final pdfExportServiceProvider = Provider<PdfExportService>((ref) {
+  return PdfExportService();
+}, name: 'pdfExportServiceProvider');
 
 /// ThemeService: liest/schreibt Theme-Einstellung als JSON.
 final themeServiceProvider = Provider<ThemeService>((ref) {

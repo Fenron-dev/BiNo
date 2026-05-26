@@ -86,6 +86,10 @@ dependencies:
   timezone: ^0.9.4
   flutter_timezone: ^5.0.2
 
+  # ─── PDF-Export ───────────────────────────────────────────────────────────
+  # pdf: typsichere PDF-Erstellung in reinem Dart (kein nativer Code nötig).
+  pdf: ^3.11.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

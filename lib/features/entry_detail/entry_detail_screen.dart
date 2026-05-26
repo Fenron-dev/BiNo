@@ -67,7 +67,7 @@ final _entryContainersProvider = StreamProvider.autoDispose
   return ref.watch(containerDaoProvider).watchContainersForEntry(entryId);
 });
 
-enum _EntryAction { exportMarkdown, delete }
+enum _EntryAction { exportMarkdown, exportPdf, delete }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -125,6 +125,21 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
           properties: props,
           definitions: defs,
           attachments: attachments,
+        );
+  }
+
+  Future<void> _exportPdf(Entry entry) async {
+    final tags = await ref.read(tagDaoProvider).getTagsForEntry(entry.id);
+    final workspaceId = ref.read(activeWorkspaceProvider);
+    final props =
+        ref.read(_detailPropertiesProvider(entry.id)).valueOrNull ?? [];
+    final defs =
+        ref.read(_detailDefinitionsProvider(workspaceId)).valueOrNull ?? [];
+    await ref.read(pdfExportServiceProvider).shareEntry(
+          entry: entry,
+          tags: tags,
+          properties: props,
+          definitions: defs,
         );
   }
 
@@ -190,6 +205,7 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
           onTogglePin: () => _togglePin(entry),
           onDelete: () => _confirmDelete(context, entry),
           onExportMarkdown: () => _exportMarkdown(entry),
+          onExportPdf: () => _exportPdf(entry),
           onWikilinkTap: (title) =>
               _navigateToWikilink(context, entry, title),
         );
@@ -206,6 +222,7 @@ class _EntryView extends ConsumerWidget {
   final VoidCallback onTogglePin;
   final VoidCallback onDelete;
   final VoidCallback onExportMarkdown;
+  final VoidCallback onExportPdf;
   final Future<void> Function(String title) onWikilinkTap;
 
   const _EntryView({
@@ -214,6 +231,7 @@ class _EntryView extends ConsumerWidget {
     required this.onTogglePin,
     required this.onDelete,
     required this.onExportMarkdown,
+    required this.onExportPdf,
     required this.onWikilinkTap,
   });
 
@@ -272,6 +290,8 @@ class _EntryView extends ConsumerWidget {
               switch (action) {
                 case _EntryAction.exportMarkdown:
                   onExportMarkdown();
+                case _EntryAction.exportPdf:
+                  onExportPdf();
                 case _EntryAction.delete:
                   onDelete();
               }
@@ -282,6 +302,14 @@ class _EntryView extends ConsumerWidget {
                 child: ListTile(
                   leading: Icon(Icons.share_outlined),
                   title: Text('Als Markdown teilen'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              const PopupMenuItem(
+                value: _EntryAction.exportPdf,
+                child: ListTile(
+                  leading: Icon(Icons.picture_as_pdf_outlined),
+                  title: Text('Als PDF teilen'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
