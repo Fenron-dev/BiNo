@@ -1,0 +1,40 @@
+version: '3.8'
+
+# Forgejo Actions Runner für Unraid
+#
+# Setup:
+#   1. In Forgejo: Repo-Settings → Actions → Runners → "New runner" → Token kopieren
+#   2. In Forgejo: Settings → Applications → "Generate token" (für Release-Upload)
+#   3. RUNNER_TOKEN und FORGEJO_TOKEN in .env eintragen
+#   4. docker compose up -d
+#
+# .env Beispiel:
+#   RUNNER_TOKEN=<Token aus Schritt 1>
+#   FORGEJO_TOKEN=<Token aus Schritt 2>
+
+services:
+  forgejo-runner:
+    image: code.forgejo.org/forgejo/runner:3
+    restart: unless-stopped
+    user: root
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/data
+    working_dir: /data
+    environment:
+      FORGEJO_INSTANCE_URL: "http://192.168.178.99:3000"
+      FORGEJO_RUNNER_REGISTRATION_TOKEN: "${RUNNER_TOKEN}"
+    entrypoint: >
+      sh -c '
+      if [ ! -f /data/.runner ]; then
+        echo "=== Registriere Runner ===" &&
+        forgejo-runner register \
+          --no-interactive \
+          --instance "$$FORGEJO_INSTANCE_URL" \
+          --token "$$FORGEJO_RUNNER_REGISTRATION_TOKEN" \
+          --name "unraid-runner" \
+          --labels "ubuntu-latest:docker://catthehacker/ubuntu:act-22.04";
+      fi &&
+      echo "=== Starte Runner Daemon ===" &&
+      forgejo-runner daemon
+      '

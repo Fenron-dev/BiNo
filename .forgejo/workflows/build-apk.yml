@@ -1,0 +1,113 @@
+name: Build Debug APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    name: Flutter Debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17 einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Flutter einrichten
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Android SDK Lizenzen + Plattformen installieren
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "platforms;android-36" \
+            "platforms;android-35" \
+            "build-tools;36.0.0" \
+            "build-tools;35.0.0" || true
+
+      - name: Flutter NDK ermitteln und installieren
+        continue-on-error: true
+        run: |
+          FLUTTER_BIN=$(which flutter)
+          FLUTTER_ROOT=$(dirname $(dirname "$FLUTTER_BIN"))
+          NDK_VER=$(find "$FLUTTER_ROOT/packages/flutter_tools" \
+            \( -name "*.gradle" -o -name "*.kt" -o -name "*.groovy" \) 2>/dev/null \
+            | xargs grep -h 'ndkVersion' 2>/dev/null \
+            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          TARGET="${NDK_VER:-27.0.12077973}"
+          if [ ! -d "$ANDROID_HOME/ndk/$TARGET" ]; then
+            yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;$TARGET" 2>&1 | tail -5
+          fi
+
+      - name: flutter pub get
+        run: flutter pub get
+
+      - name: build_runner
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: flutter build apk
+        run: |
+          flutter build apk --debug --split-per-abi 2>&1 | tee /tmp/build.log
+          EXIT=${PIPESTATUS[0]}
+          if [ $EXIT -ne 0 ]; then
+            echo "════════════ GRADLE FEHLER (gefiltert) ════════════"
+            grep -E "FAILURE:|BUILD FAILED|Execution failed|> Task|error:|Could not|Exception" \
+              /tmp/build.log | grep -v "^$" | head -40
+            exit $EXIT
+          fi
+
+      - name: APK-Pfade prüfen
+        run: ls -lh build/app/outputs/flutter-apk/
+
+      - name: APK als Artifact hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: |
+            build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
+            build/app/outputs/flutter-apk/app-armeabi-v7a-debug.apk
+          retention-days: 7
+
+      - name: Forgejo Release erstellen
+        env:
+          FORGEJO_URL: ${{ secrets.FORGEJO_URL }}
+          FORGEJO_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
+        run: |
+          # Alten Release löschen
+          curl -s -X DELETE \
+            -H "Authorization: token $FORGEJO_TOKEN" \
+            "$FORGEJO_URL/api/v1/repos/${{ github.repository }}/releases/tags/latest-debug" || true
+
+          sleep 2
+
+          # Neuen Release anlegen
+          RELEASE_ID=$(curl -s -X POST \
+            -H "Authorization: token $FORGEJO_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"tag_name\":\"latest-debug\",\"name\":\"Aktueller Debug-Build\",\"body\":\"Debug-Build – Commit ${{ github.sha }}\n\n**Installation:**\n1. APK herunterladen\n2. Einstellungen → Apps → Unbekannte Quellen → erlauben\n3. APK installieren\",\"prerelease\":true}" \
+            "$FORGEJO_URL/api/v1/repos/${{ github.repository }}/releases" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+
+          echo "Release ID: $RELEASE_ID"
+
+          # APKs hochladen
+          for APK in build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk \
+                     build/app/outputs/flutter-apk/app-armeabi-v7a-debug.apk; do
+            [ -f "$APK" ] || continue
+            NAME=$(basename "$APK")
+            curl -s -X POST \
+              -H "Authorization: token $FORGEJO_TOKEN" \
+              -F "attachment=@$APK;filename=$NAME" \
+              "$FORGEJO_URL/api/v1/repos/${{ github.repository }}/releases/$RELEASE_ID/assets"
+            echo "Hochgeladen: $NAME"
+          done
