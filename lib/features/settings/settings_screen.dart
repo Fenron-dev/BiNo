@@ -18,6 +18,7 @@ import '../../data/db/database.dart';
 import '../../services/ai_enrich_service.dart';
 import '../../services/ai_settings_service.dart';
 import '../../services/app_lock_service.dart';
+import '../templates/template_form_sheet.dart';
 import '../../services/backup_service.dart';
 import '../../services/theme_service.dart';
 import '../hubs/hub_form_sheet.dart';
@@ -302,6 +303,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           // ── Tags ───────────────────────────────────────────────────────
           _SectionHeader(title: 'Tags'),
           _TagsManager(),
+
+          const Divider(),
+
+          // ── Vorlagen ────────────────────────────────────────────────────
+          _SectionHeader(title: 'Vorlagen'),
+          _TemplatesManager(),
 
           const Divider(),
 
@@ -865,6 +872,98 @@ class _TagTile extends ConsumerWidget {
             visualDensity: VisualDensity.compact,
             color: Theme.of(context).colorScheme.error,
             onPressed: () => _delete(context, ref),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Vorlagen-Verwaltung ───────────────────────────────────────────────────────
+
+final _templatesProvider = StreamProvider.autoDispose<List<Template>>((ref) {
+  return ref.watch(templateDaoProvider).watchAll();
+});
+
+/// Zeigt alle Vorlagen an und erlaubt Erstellen, Bearbeiten und Löschen.
+class _TemplatesManager extends ConsumerWidget {
+  const _TemplatesManager();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(_templatesProvider);
+
+    return async.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (templates) => Column(
+        children: [
+          ...templates.map(
+            (t) => ListTile(
+              leading: Text(t.icon, style: const TextStyle(fontSize: 24)),
+              title: Text(t.name),
+              subtitle: t.description != null
+                  ? Text(
+                      t.description!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    )
+                  : null,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    tooltip: 'Bearbeiten',
+                    onPressed: () =>
+                        showTemplateFormSheet(context, ref, existing: t),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Icons.delete_outline,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    tooltip: 'Löschen',
+                    onPressed: () async {
+                      final ok = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Vorlage löschen?'),
+                          content: Text(
+                              '„${t.name}" wird dauerhaft gelöscht.'),
+                          actions: [
+                            TextButton(
+                              onPressed: () =>
+                                  Navigator.of(ctx).pop(false),
+                              child: const Text('Abbrechen'),
+                            ),
+                            FilledButton(
+                              style: FilledButton.styleFrom(
+                                backgroundColor:
+                                    Theme.of(context).colorScheme.error,
+                              ),
+                              onPressed: () =>
+                                  Navigator.of(ctx).pop(true),
+                              child: const Text('Löschen'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (ok == true) {
+                        await ref
+                            .read(templateDaoProvider)
+                            .deleteTemplate(t.id);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.add_circle_outline),
+            title: const Text('Neue Vorlage'),
+            onTap: () => showTemplateFormSheet(context, ref),
           ),
         ],
       ),

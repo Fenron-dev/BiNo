@@ -19,6 +19,7 @@ import '../../data/db/tables/entries.dart';
 import '../../services/ocr_service.dart';
 import '../../services/url_metadata_service.dart';
 import 'capture_controller.dart';
+import '../templates/template_picker_sheet.dart';
 
 /// Quick-Capture Bottom-Sheet.
 class CaptureSheet extends ConsumerStatefulWidget {
@@ -129,6 +130,26 @@ class _CaptureSheetState extends ConsumerState<CaptureSheet> {
     ref.read(captureControllerProvider.notifier).onBodyChanged(newText);
   }
 
+  Future<void> _applyTemplate() async {
+    final bodyText = await showTemplatePickerSheet(context, ref);
+    if (bodyText == null || bodyText.isEmpty || !mounted) return;
+
+    // Template-Text an Cursor-Position einfügen (oder ans Ende anhängen).
+    final pos = _textController.selection.isValid
+        ? _textController.selection.baseOffset
+        : _textController.text.length;
+    final current = _textController.text;
+    final separator = current.isEmpty ? '' : '\n';
+    final newText =
+        current.substring(0, pos) + separator + bodyText + current.substring(pos);
+
+    _textController.value = _textController.value.copyWith(
+      text: newText,
+      selection: TextSelection.collapsed(offset: pos + separator.length + bodyText.length),
+    );
+    ref.read(captureControllerProvider.notifier).onBodyChanged(newText);
+  }
+
   Future<void> _pasteFromClipboard() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final text = data?.text;
@@ -206,6 +227,7 @@ class _CaptureSheetState extends ConsumerState<CaptureSheet> {
             onCamera: () => controller.pickImageFromCamera(),
             onWikilink: _insertWikilink,
             onPaste: _pasteFromClipboard,
+            onTemplate: _applyTemplate,
             // URL-Scan-Button nur sichtbar wenn Fotos vorhanden.
             onScanUrl: captureState.pendingImages.isNotEmpty
                 ? (_isScanning ? null : _scanForUrls)
@@ -360,6 +382,7 @@ class _ActionBar extends StatelessWidget {
   final VoidCallback onCamera;
   final VoidCallback onWikilink;
   final VoidCallback onPaste;
+  final VoidCallback onTemplate;
   /// null = Button ausblenden. Callback null = gerade am Scannen (disabled).
   final VoidCallback? onScanUrl;
   final bool isScanning;
@@ -369,6 +392,7 @@ class _ActionBar extends StatelessWidget {
     required this.onCamera,
     required this.onWikilink,
     required this.onPaste,
+    required this.onTemplate,
     this.onScanUrl,
     this.isScanning = false,
   });
@@ -399,6 +423,11 @@ class _ActionBar extends StatelessWidget {
             icon: Icons.link,
             label: '[[Link]]',
             onTap: onWikilink,
+          ),
+          _ActionButton(
+            icon: Icons.description_outlined,
+            label: 'Vorlage',
+            onTap: onTemplate,
           ),
           // Wird nur angezeigt wenn Fotos im Sheet vorhanden sind.
           if (onScanUrl != null || isScanning)

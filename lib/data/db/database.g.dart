@@ -4716,6 +4716,18 @@ class $TemplatesTable extends Templates
     requiredDuringInsert: false,
     defaultValue: const Constant('{}'),
   );
+  static const VerificationMeta _bodyTemplateMeta = const VerificationMeta(
+    'bodyTemplate',
+  );
+  @override
+  late final GeneratedColumn<String> bodyTemplate = GeneratedColumn<String>(
+    'body_template',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -4737,6 +4749,7 @@ class $TemplatesTable extends Templates
     description,
     propertyIds,
     defaultValues,
+    bodyTemplate,
     createdAt,
   ];
   @override
@@ -4806,6 +4819,15 @@ class $TemplatesTable extends Templates
         ),
       );
     }
+    if (data.containsKey('body_template')) {
+      context.handle(
+        _bodyTemplateMeta,
+        bodyTemplate.isAcceptableOrUnknown(
+          data['body_template']!,
+          _bodyTemplateMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -4849,6 +4871,10 @@ class $TemplatesTable extends Templates
         DriftSqlType.string,
         data['${effectivePrefix}default_values'],
       )!,
+      bodyTemplate: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}body_template'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -4882,6 +4908,10 @@ class Template extends DataClass implements Insertable<Template> {
   /// Leere Map wenn keine Standardwerte. Beispiel:
   /// '{"prop-rating":"0","prop-genre":"\"Sachbuch\""}'
   final String defaultValues;
+
+  /// Vorausgefüllter Body-Text, den der Nutzer beim Erfassen bekommt.
+  /// Leer wenn das Template nur Properties definiert, aber keinen Textrahmen vorgibt.
+  final String bodyTemplate;
   final DateTime createdAt;
   const Template({
     required this.id,
@@ -4891,6 +4921,7 @@ class Template extends DataClass implements Insertable<Template> {
     this.description,
     required this.propertyIds,
     required this.defaultValues,
+    required this.bodyTemplate,
     required this.createdAt,
   });
   @override
@@ -4905,6 +4936,7 @@ class Template extends DataClass implements Insertable<Template> {
     }
     map['property_ids'] = Variable<String>(propertyIds);
     map['default_values'] = Variable<String>(defaultValues);
+    map['body_template'] = Variable<String>(bodyTemplate);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -4920,6 +4952,7 @@ class Template extends DataClass implements Insertable<Template> {
           : Value(description),
       propertyIds: Value(propertyIds),
       defaultValues: Value(defaultValues),
+      bodyTemplate: Value(bodyTemplate),
       createdAt: Value(createdAt),
     );
   }
@@ -4937,6 +4970,7 @@ class Template extends DataClass implements Insertable<Template> {
       description: serializer.fromJson<String?>(json['description']),
       propertyIds: serializer.fromJson<String>(json['propertyIds']),
       defaultValues: serializer.fromJson<String>(json['defaultValues']),
+      bodyTemplate: serializer.fromJson<String>(json['bodyTemplate']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -4951,6 +4985,7 @@ class Template extends DataClass implements Insertable<Template> {
       'description': serializer.toJson<String?>(description),
       'propertyIds': serializer.toJson<String>(propertyIds),
       'defaultValues': serializer.toJson<String>(defaultValues),
+      'bodyTemplate': serializer.toJson<String>(bodyTemplate),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -4963,6 +4998,7 @@ class Template extends DataClass implements Insertable<Template> {
     Value<String?> description = const Value.absent(),
     String? propertyIds,
     String? defaultValues,
+    String? bodyTemplate,
     DateTime? createdAt,
   }) => Template(
     id: id ?? this.id,
@@ -4972,6 +5008,7 @@ class Template extends DataClass implements Insertable<Template> {
     description: description.present ? description.value : this.description,
     propertyIds: propertyIds ?? this.propertyIds,
     defaultValues: defaultValues ?? this.defaultValues,
+    bodyTemplate: bodyTemplate ?? this.bodyTemplate,
     createdAt: createdAt ?? this.createdAt,
   );
   Template copyWithCompanion(TemplatesCompanion data) {
@@ -4991,6 +5028,9 @@ class Template extends DataClass implements Insertable<Template> {
       defaultValues: data.defaultValues.present
           ? data.defaultValues.value
           : this.defaultValues,
+      bodyTemplate: data.bodyTemplate.present
+          ? data.bodyTemplate.value
+          : this.bodyTemplate,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -5005,6 +5045,7 @@ class Template extends DataClass implements Insertable<Template> {
           ..write('description: $description, ')
           ..write('propertyIds: $propertyIds, ')
           ..write('defaultValues: $defaultValues, ')
+          ..write('bodyTemplate: $bodyTemplate, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -5019,6 +5060,7 @@ class Template extends DataClass implements Insertable<Template> {
     description,
     propertyIds,
     defaultValues,
+    bodyTemplate,
     createdAt,
   );
   @override
@@ -5032,6 +5074,7 @@ class Template extends DataClass implements Insertable<Template> {
           other.description == this.description &&
           other.propertyIds == this.propertyIds &&
           other.defaultValues == this.defaultValues &&
+          other.bodyTemplate == this.bodyTemplate &&
           other.createdAt == this.createdAt);
 }
 
@@ -5043,6 +5086,7 @@ class TemplatesCompanion extends UpdateCompanion<Template> {
   final Value<String?> description;
   final Value<String> propertyIds;
   final Value<String> defaultValues;
+  final Value<String> bodyTemplate;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
   const TemplatesCompanion({
@@ -5053,6 +5097,7 @@ class TemplatesCompanion extends UpdateCompanion<Template> {
     this.description = const Value.absent(),
     this.propertyIds = const Value.absent(),
     this.defaultValues = const Value.absent(),
+    this.bodyTemplate = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -5064,6 +5109,7 @@ class TemplatesCompanion extends UpdateCompanion<Template> {
     this.description = const Value.absent(),
     this.propertyIds = const Value.absent(),
     this.defaultValues = const Value.absent(),
+    this.bodyTemplate = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -5076,6 +5122,7 @@ class TemplatesCompanion extends UpdateCompanion<Template> {
     Expression<String>? description,
     Expression<String>? propertyIds,
     Expression<String>? defaultValues,
+    Expression<String>? bodyTemplate,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
   }) {
@@ -5087,6 +5134,7 @@ class TemplatesCompanion extends UpdateCompanion<Template> {
       if (description != null) 'description': description,
       if (propertyIds != null) 'property_ids': propertyIds,
       if (defaultValues != null) 'default_values': defaultValues,
+      if (bodyTemplate != null) 'body_template': bodyTemplate,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -5100,6 +5148,7 @@ class TemplatesCompanion extends UpdateCompanion<Template> {
     Value<String?>? description,
     Value<String>? propertyIds,
     Value<String>? defaultValues,
+    Value<String>? bodyTemplate,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
   }) {
@@ -5111,6 +5160,7 @@ class TemplatesCompanion extends UpdateCompanion<Template> {
       description: description ?? this.description,
       propertyIds: propertyIds ?? this.propertyIds,
       defaultValues: defaultValues ?? this.defaultValues,
+      bodyTemplate: bodyTemplate ?? this.bodyTemplate,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
     );
@@ -5140,6 +5190,9 @@ class TemplatesCompanion extends UpdateCompanion<Template> {
     if (defaultValues.present) {
       map['default_values'] = Variable<String>(defaultValues.value);
     }
+    if (bodyTemplate.present) {
+      map['body_template'] = Variable<String>(bodyTemplate.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -5159,6 +5212,7 @@ class TemplatesCompanion extends UpdateCompanion<Template> {
           ..write('description: $description, ')
           ..write('propertyIds: $propertyIds, ')
           ..write('defaultValues: $defaultValues, ')
+          ..write('bodyTemplate: $bodyTemplate, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -5189,6 +5243,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final ContainerDao containerDao = ContainerDao(this as AppDatabase);
   late final AttachmentDao attachmentDao = AttachmentDao(this as AppDatabase);
   late final PropertyDao propertyDao = PropertyDao(this as AppDatabase);
+  late final TemplateDao templateDao = TemplateDao(this as AppDatabase);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -7521,6 +7576,7 @@ typedef $$TemplatesTableCreateCompanionBuilder =
       Value<String?> description,
       Value<String> propertyIds,
       Value<String> defaultValues,
+      Value<String> bodyTemplate,
       Value<DateTime> createdAt,
       Value<int> rowid,
     });
@@ -7533,6 +7589,7 @@ typedef $$TemplatesTableUpdateCompanionBuilder =
       Value<String?> description,
       Value<String> propertyIds,
       Value<String> defaultValues,
+      Value<String> bodyTemplate,
       Value<DateTime> createdAt,
       Value<int> rowid,
     });
@@ -7578,6 +7635,11 @@ class $$TemplatesTableFilterComposer
 
   ColumnFilters<String> get defaultValues => $composableBuilder(
     column: $table.defaultValues,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bodyTemplate => $composableBuilder(
+    column: $table.bodyTemplate,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7631,6 +7693,11 @@ class $$TemplatesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get bodyTemplate => $composableBuilder(
+    column: $table.bodyTemplate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -7675,6 +7742,11 @@ class $$TemplatesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get bodyTemplate => $composableBuilder(
+    column: $table.bodyTemplate,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 }
@@ -7714,6 +7786,7 @@ class $$TemplatesTableTableManager
                 Value<String?> description = const Value.absent(),
                 Value<String> propertyIds = const Value.absent(),
                 Value<String> defaultValues = const Value.absent(),
+                Value<String> bodyTemplate = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TemplatesCompanion(
@@ -7724,6 +7797,7 @@ class $$TemplatesTableTableManager
                 description: description,
                 propertyIds: propertyIds,
                 defaultValues: defaultValues,
+                bodyTemplate: bodyTemplate,
                 createdAt: createdAt,
                 rowid: rowid,
               ),
@@ -7736,6 +7810,7 @@ class $$TemplatesTableTableManager
                 Value<String?> description = const Value.absent(),
                 Value<String> propertyIds = const Value.absent(),
                 Value<String> defaultValues = const Value.absent(),
+                Value<String> bodyTemplate = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TemplatesCompanion.insert(
@@ -7746,6 +7821,7 @@ class $$TemplatesTableTableManager
                 description: description,
                 propertyIds: propertyIds,
                 defaultValues: defaultValues,
+                bodyTemplate: bodyTemplate,
                 createdAt: createdAt,
                 rowid: rowid,
               ),

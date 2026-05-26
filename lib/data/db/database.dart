@@ -23,6 +23,7 @@ import 'daos/tag_dao.dart';
 import 'daos/container_dao.dart';
 import 'daos/attachment_dao.dart';
 import 'daos/property_dao.dart';
+import 'daos/template_dao.dart';
 
 // Der `part`-Direktive verweist auf die von drift_dev generierte Datei.
 // Sie enthält die _$AppDatabase-Basisklasse mit allen Query-Methoden.
@@ -56,6 +57,7 @@ part 'database.g.dart';
     ContainerDao,
     AttachmentDao,
     PropertyDao,
+    TemplateDao,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -72,7 +74,7 @@ class AppDatabase extends _$AppDatabase {
   // Jede Erhöhung erfordert einen neuen onUpgrade-Block in migration.
   // REGEL: Bestehende Migrationen nie nachträglich ändern – nur neue hinzufügen.
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -156,6 +158,10 @@ class AppDatabase extends _$AppDatabase {
         /// onUpgrade: Wird ausgeführt, wenn schemaVersion erhöht wurde.
         /// REGEL: Blöcke nie nachträglich ändern – nur neue if-Blöcke anfügen.
         onUpgrade: (Migrator m, int from, int to) async {
+          if (from < 3) {
+            // ── templates: bodyTemplate-Spalte hinzufügen ──────────────────
+            await m.addColumn(templates, templates.bodyTemplate);
+          }
           if (from < 2) {
             // ── Neue Tabellen anlegen ───────────────────────────────────────
             await m.createTable(workspaces);

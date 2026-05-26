@@ -176,7 +176,7 @@ class _FeedViewState extends ConsumerState<_FeedView> {
   bool _dismissedOnThisDay = false;
   bool _dismissedRandomCard = false;
 
-  static const _kFilters = <(String, String, IconData)>[
+  static const _kTypeFilters = <(String, String, IconData)>[
     ('text', 'Text', Icons.text_fields_outlined),
     ('link', 'Link', Icons.link_outlined),
     ('image', 'Bild', Icons.image_outlined),
@@ -184,9 +184,19 @@ class _FeedViewState extends ConsumerState<_FeedView> {
     ('pinned', 'Angepinnt', Icons.push_pin_outlined),
   ];
 
+  static const _kStatusFilters = <(String, String, IconData)>[
+    ('status_active', 'Aktiv', Icons.play_circle_outline),
+    ('status_done', 'Fertig', Icons.check_circle_outline),
+    ('status_archived', 'Archiviert', Icons.archive_outlined),
+  ];
+
   List<Entry> _applyFilter(List<Entry> all) {
     if (_activeFilter == null) return all;
     if (_activeFilter == 'pinned') return all.where((e) => e.pinned).toList();
+    if (_activeFilter!.startsWith('status_')) {
+      final status = _activeFilter!.substring('status_'.length);
+      return all.where((e) => e.status == status).toList();
+    }
     return all.where((e) => e.type == _activeFilter).toList();
   }
 
@@ -208,7 +218,7 @@ class _FeedViewState extends ConsumerState<_FeedView> {
             onDismiss: () => setState(() => _dismissedOnThisDay = true),
           ),
 
-        // Filter-Chips
+        // Filter-Chips (Typ + Status)
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
@@ -222,7 +232,30 @@ class _FeedViewState extends ConsumerState<_FeedView> {
                   onSelected: (_) => setState(() => _activeFilter = null),
                 ),
               ),
-              ..._kFilters.map(
+              ..._kTypeFilters.map(
+                (f) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilterChip(
+                    avatar: Icon(f.$3, size: 16),
+                    label: Text(f.$2),
+                    selected: _activeFilter == f.$1,
+                    onSelected: (v) =>
+                        setState(() => _activeFilter = v ? f.$1 : null),
+                  ),
+                ),
+              ),
+              // Visueller Trenner zwischen Typ- und Status-Filtern
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: VerticalDivider(
+                  width: 1,
+                  thickness: 1,
+                  indent: 6,
+                  endIndent: 6,
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
+              ),
+              ..._kStatusFilters.map(
                 (f) => Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: FilterChip(

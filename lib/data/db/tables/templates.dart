@@ -41,6 +41,10 @@ class Templates extends Table {
   TextColumn get defaultValues =>
       text().withDefault(const Constant('{}'))();
 
+  /// Vorausgefüllter Body-Text, den der Nutzer beim Erfassen bekommt.
+  /// Leer wenn das Template nur Properties definiert, aber keinen Textrahmen vorgibt.
+  TextColumn get bodyTemplate => text().withDefault(const Constant(''))();
+
   DateTimeColumn get createdAt =>
       dateTime().clientDefault(() => DateTime.now().toUtc())();
 

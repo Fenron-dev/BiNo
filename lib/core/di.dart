@@ -19,6 +19,7 @@ import '../data/db/daos/tag_dao.dart';
 import '../data/db/daos/container_dao.dart';
 import '../data/db/daos/attachment_dao.dart';
 import '../data/db/daos/property_dao.dart';
+import '../data/db/daos/template_dao.dart';
 import '../data/repositories/entry_repository.dart';
 import '../data/repositories/attachment_repository.dart';
 import '../data/ml/ocr_service.dart';
@@ -64,6 +65,10 @@ final attachmentDaoProvider = Provider<AttachmentDao>((ref) {
 final propertyDaoProvider = Provider<PropertyDao>((ref) {
   return ref.watch(databaseProvider).propertyDao;
 }, name: 'propertyDaoProvider');
+
+final templateDaoProvider = Provider<TemplateDao>((ref) {
+  return ref.watch(databaseProvider).templateDao;
+}, name: 'templateDaoProvider');
 
 // ── Services ──────────────────────────────────────────────────────────────
 

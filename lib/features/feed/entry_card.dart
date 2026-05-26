@@ -83,9 +83,18 @@ class EntryCard extends ConsumerWidget {
 
               const SizedBox(height: 8),
 
-              // Metadaten-Zeile: Link-Domain, Zeitstempel, Status, Pin.
+              // Metadaten-Zeile: Typ-Icon, Domain, Zeitstempel, Status, Pin.
               Row(
                 children: [
+                  if (entry.type != 'text')
+                    Padding(
+                      padding: const EdgeInsets.only(right: 5),
+                      child: Icon(
+                        _typeIcon(entry.type),
+                        size: 13,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                   if (entry.sourceUrl != null)
                     _DomainBadge(url: entry.sourceUrl!),
                   Text(
@@ -109,6 +118,15 @@ class EntryCard extends ConsumerWidget {
       ),
     );
   }
+
+  static IconData _typeIcon(String type) => switch (type) {
+        'link' => Icons.link_outlined,
+        'audio' => Icons.mic_none_outlined,
+        'image' => Icons.image_outlined,
+        'video' => Icons.videocam_outlined,
+        'mixed' => Icons.layers_outlined,
+        _ => Icons.text_fields_outlined,
+      };
 
   String _formatTimestamp(DateTime utcTime) {
     final local = utcTime.toLocal();
