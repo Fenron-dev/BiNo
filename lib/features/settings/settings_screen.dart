@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/di.dart';
+import '../../data/db/daos/tag_dao.dart' show TagWithCount;
 import '../../data/db/database.dart';
 import '../../services/ai_enrich_service.dart';
 import '../../services/ai_settings_service.dart';
@@ -295,6 +296,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           // ── Hub-Tabs ──────────────────────────────────────────────────
           _SectionHeader(title: 'Hub-Tabs'),
           _HubTabsManager(),
+
+          const Divider(),
+
+          // ── Tags ───────────────────────────────────────────────────────
+          _SectionHeader(title: 'Tags'),
+          _TagsManager(),
 
           const Divider(),
 
@@ -726,6 +733,142 @@ class _HubTabsManager extends ConsumerWidget {
     if (confirmed == true) {
       await ref.read(containerDaoProvider).archiveContainer(hub.id);
     }
+  }
+}
+
+// ── Tag-Verwaltung ────────────────────────────────────────────────────────────
+
+final _tagsWithCountsProvider = StreamProvider<List<TagWithCount>>((ref) {
+  return ref.watch(tagDaoProvider).watchTagsWithCounts();
+});
+
+class _TagsManager extends ConsumerWidget {
+  const _TagsManager();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(_tagsWithCountsProvider);
+
+    return async.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (tags) {
+        if (tags.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: Text(
+              'Noch keine Tags vorhanden. Erstelle Einträge mit #tag.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          );
+        }
+        return Column(
+          children: tags.map((twc) => _TagTile(twc: twc)).toList(),
+        );
+      },
+    );
+  }
+}
+
+class _TagTile extends ConsumerWidget {
+  final TagWithCount twc;
+
+  const _TagTile({required this.twc});
+
+  Future<void> _rename(BuildContext context, WidgetRef ref) async {
+    final ctrl = TextEditingController(text: twc.tag.name);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Tag umbenennen'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Name'),
+          onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
+            child: const Text('Umbenennen'),
+          ),
+        ],
+      ),
+    );
+    if (newName != null && newName.isNotEmpty && newName != twc.tag.name) {
+      await ref.read(tagDaoProvider).renameTag(twc.tag.id, newName);
+    }
+  }
+
+  Future<void> _delete(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Tag löschen?'),
+        content: Text(
+          '„#${twc.tag.name}" wird aus allen ${twc.count} Einträgen entfernt.\n'
+          'Die #-Erwähnung im Text bleibt erhalten.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Löschen'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await ref.read(tagDaoProvider).deleteTagAndLinks(twc.tag.id);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ListTile(
+      dense: true,
+      leading: const Icon(Icons.label_outline, size: 20),
+      title: Text('#${twc.tag.name}'),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '${twc.count}',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            tooltip: 'Umbenennen',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => _rename(context, ref),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 18),
+            tooltip: 'Löschen',
+            visualDensity: VisualDensity.compact,
+            color: Theme.of(context).colorScheme.error,
+            onPressed: () => _delete(context, ref),
+          ),
+        ],
+      ),
+    );
   }
 }
 

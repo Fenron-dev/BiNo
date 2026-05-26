@@ -56,4 +56,49 @@ class TagDao extends DatabaseAccessor<AppDatabase> with _$TagDaoMixin {
 
   /// Beobachtet alle Tags als reaktiven Stream (für Tag-Verwaltung in Phase 6).
   Stream<List<Tag>> watchAllTags() => select(tags).watch();
+
+  /// Beobachtet alle Tags mit der Anzahl verknüpfter Einträge.
+  Stream<List<TagWithCount>> watchTagsWithCounts() {
+    const sql = '''
+      SELECT t.id, t.name, t.color, t.icon, t.parent_id, t.workspace_id,
+             COUNT(et.entry_id) AS entry_count
+      FROM tags t
+      LEFT JOIN entry_tags et ON et.tag_id = t.id
+      GROUP BY t.id
+      ORDER BY t.name
+    ''';
+    return customSelect(sql, readsFrom: {tags, entryTags})
+        .watch()
+        .map((rows) => rows.map((row) {
+              final tag = Tag(
+                id: row.read<String>('id'),
+                name: row.read<String>('name'),
+                color: row.readNullable<String>('color'),
+                icon: row.readNullable<String>('icon'),
+                parentId: row.readNullable<String>('parent_id'),
+                workspaceId: row.read<String>('workspace_id'),
+              );
+              return TagWithCount(tag: tag, count: row.read<int>('entry_count'));
+            }).toList());
+  }
+
+  /// Benennt einen Tag um (nur den Tabellen-Eintrag; Body-Texte bleiben unverändert).
+  Future<void> renameTag(String id, String newName) =>
+      (update(tags)..where((t) => t.id.equals(id))).write(
+        TagsCompanion(name: Value(newName)),
+      );
+
+  /// Löscht einen Tag und alle seine entry_tags-Verknüpfungen.
+  Future<void> deleteTagAndLinks(String id) async {
+    await (delete(entryTags)..where((t) => t.tagId.equals(id))).go();
+    await (delete(tags)..where((t) => t.id.equals(id))).go();
+  }
+}
+
+/// Tag mit Anzahl verknüpfter Einträge (für die Tag-Verwaltung in Settings).
+class TagWithCount {
+  final Tag tag;
+  final int count;
+
+  const TagWithCount({required this.tag, required this.count});
 }

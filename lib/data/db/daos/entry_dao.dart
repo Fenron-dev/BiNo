@@ -133,6 +133,7 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
     String? title,
     required String body,
     String? notes,
+    String? status,
     required DateTime updatedAt,
   }) =>
       (update(entries)..where((t) => t.id.equals(id))).write(
@@ -140,6 +141,7 @@ class EntryDao extends DatabaseAccessor<AppDatabase> with _$EntryDaoMixin {
           title: Value(title),
           body: Value(body),
           notes: Value(notes),
+          status: status != null ? Value(status) : const Value.absent(),
           updatedAt: Value(updatedAt),
         ),
       );

@@ -109,6 +109,7 @@ class EntryRepository {
     String? title,
     required String body,
     String? notes,
+    String? status,
   }) async {
     final now = DateTime.now().toUtc();
     await _entryDao.attachedDatabase.transaction(() async {
@@ -117,6 +118,7 @@ class EntryRepository {
         title: title,
         body: body,
         notes: notes,
+        status: status,
         updatedAt: now,
       );
       // Tags neu synchronisieren: alte Links entfernen, neue setzen.

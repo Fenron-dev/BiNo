@@ -58,6 +58,7 @@ class _EditEntryScreenState extends ConsumerState<EditEntryScreen> {
   final _bodyCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   DateTime? _reminderAt;
+  String _status = 'inbox';
   bool _initialized = false;
   bool _isSaving = false;
 
@@ -75,6 +76,7 @@ class _EditEntryScreenState extends ConsumerState<EditEntryScreen> {
     _bodyCtrl.text = entry.body;
     _notesCtrl.text = entry.notes ?? '';
     _reminderAt = entry.reminderAt;
+    _status = entry.status;
     _initialized = true;
   }
 
@@ -86,6 +88,7 @@ class _EditEntryScreenState extends ConsumerState<EditEntryScreen> {
       title: _titleCtrl.text.trim().isEmpty ? null : _titleCtrl.text.trim(),
       body: _bodyCtrl.text,
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+      status: _status,
     );
     if (mounted) context.pop();
   }
@@ -117,6 +120,8 @@ class _EditEntryScreenState extends ConsumerState<EditEntryScreen> {
           bodyCtrl: _bodyCtrl,
           notesCtrl: _notesCtrl,
           reminderAt: _reminderAt,
+          status: _status,
+          onStatusChanged: (s) => setState(() => _status = s),
           isSaving: _isSaving,
           onSave: _save,
         );
@@ -133,6 +138,8 @@ class _EditView extends ConsumerWidget {
   final TextEditingController bodyCtrl;
   final TextEditingController notesCtrl;
   final DateTime? reminderAt;
+  final String status;
+  final ValueChanged<String> onStatusChanged;
   final bool isSaving;
   final VoidCallback onSave;
 
@@ -142,6 +149,8 @@ class _EditView extends ConsumerWidget {
     required this.bodyCtrl,
     required this.notesCtrl,
     required this.reminderAt,
+    required this.status,
+    required this.onStatusChanged,
     required this.isSaving,
     required this.onSave,
   });
@@ -212,6 +221,16 @@ class _EditView extends ConsumerWidget {
 
           // ── Notizen (kollabierbar) ─────────────────────────────────────────
           _NotesSection(notesCtrl: notesCtrl),
+
+          const SizedBox(height: 16),
+          const Divider(),
+          const SizedBox(height: 8),
+
+          // ── Status ─────────────────────────────────────────────────────────
+          _StatusSection(
+            status: status,
+            onChanged: onStatusChanged,
+          ),
 
           const SizedBox(height: 16),
           const Divider(),
@@ -319,6 +338,56 @@ class _NotesSectionState extends State<_NotesSection> {
               keyboardType: TextInputType.multiline,
             ),
           ),
+      ],
+    );
+  }
+}
+
+// ── Status-Sektion ───────────────────────────────────────────────────────────
+
+const _kStatusOptions = [
+  ('inbox',    'Inbox',      Icons.inbox_outlined),
+  ('active',   'Aktiv',      Icons.play_circle_outline),
+  ('done',     'Fertig',     Icons.check_circle_outline),
+  ('archived', 'Archiviert', Icons.archive_outlined),
+];
+
+class _StatusSection extends StatelessWidget {
+  final String status;
+  final ValueChanged<String> onChanged;
+
+  const _StatusSection({required this.status, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.flag_outlined, size: 16,
+                color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 6),
+            Text('Status', style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            )),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: _kStatusOptions.map((opt) {
+            final isSelected = status == opt.$1;
+            return ChoiceChip(
+              avatar: Icon(opt.$3, size: 16),
+              label: Text(opt.$2),
+              selected: isSelected,
+              onSelected: (_) => onChanged(opt.$1),
+            );
+          }).toList(),
+        ),
       ],
     );
   }
