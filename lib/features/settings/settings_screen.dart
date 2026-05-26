@@ -18,6 +18,7 @@ import '../../data/db/database.dart';
 import '../../services/ai_enrich_service.dart';
 import '../../services/ai_settings_service.dart';
 import '../../services/app_lock_service.dart';
+import '../../services/url_analysis_settings_service.dart';
 import '../templates/template_form_sheet.dart';
 import '../../services/backup_service.dart';
 import '../../services/theme_service.dart';
@@ -563,6 +564,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           const Divider(),
 
+          // ── URL-Analyse ────────────────────────────────────────────────
+          _SectionHeader(title: 'URL-Analyse mit KI'),
+          _UrlAnalysisSettings(),
+
+          const Divider(),
+
           // ── App-Sperre ─────────────────────────────────────────────────
           _SectionHeader(title: 'Datenschutz'),
           _AppLockTile(),
@@ -967,6 +974,118 @@ class _TemplatesManager extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── URL-Analyse ───────────────────────────────────────────────────────────────
+
+/// Einstellungen für die automatische KI-Analyse von Link-Einträgen.
+class _UrlAnalysisSettings extends StatefulWidget {
+  const _UrlAnalysisSettings();
+
+  @override
+  State<_UrlAnalysisSettings> createState() => _UrlAnalysisSettingsState();
+}
+
+class _UrlAnalysisSettingsState extends State<_UrlAnalysisSettings> {
+  UrlAnalysisConfig _config = const UrlAnalysisConfig();
+  bool _loading = true;
+
+  static const _kProviders = [
+    (UrlAnalysisSettingsService.kSame, 'Wie KI-Anreicherung'),
+    (kProviderAnthropic, 'Claude (Anthropic)'),
+    (kProviderOpenRouter, 'OpenRouter'),
+    (kProviderOllama, 'Ollama / Lokal'),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final config =
+        await UrlAnalysisSettingsService().load();
+    if (mounted) setState(() { _config = config; _loading = false; });
+  }
+
+  Future<void> _save(UrlAnalysisConfig config) async {
+    await UrlAnalysisSettingsService().save(config);
+    if (mounted) setState(() => _config = config);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SwitchListTile(
+          title: const Text('URL-Analyse aktivieren'),
+          subtitle: const Text(
+            'Links werden nach dem Erfassen automatisch mit KI analysiert',
+          ),
+          value: _config.enabled,
+          onChanged: (v) => _save(_config.copyWith(enabled: v)),
+        ),
+
+        if (_config.enabled) ...[
+          SwitchListTile(
+            title: const Text('YouTube-Transkript einbeziehen'),
+            subtitle: const Text(
+              'Lädt das Transkript und erstellt eine Video-Zusammenfassung',
+            ),
+            value: _config.youtubeTranscriptEnabled,
+            onChanged: (v) =>
+                _save(_config.copyWith(youtubeTranscriptEnabled: v)),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Text('AI-Provider', style: theme.textTheme.labelMedium),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: DropdownButtonFormField<String>(
+              initialValue: _config.provider,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+              items: _kProviders.map((p) {
+                return DropdownMenuItem<String>(
+                  value: p.$1,
+                  child: Text(p.$2),
+                );
+              }).toList(),
+              onChanged: (v) {
+                if (v != null) _save(_config.copyWith(provider: v));
+              },
+            ),
+          ),
+
+          if (_config.provider != UrlAnalysisSettingsService.kSame)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Text(
+                'API-Key und Modell werden aus „KI – Anreicherung" übernommen.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ),
+
+          const SizedBox(height: 8),
+        ],
+      ],
     );
   }
 }

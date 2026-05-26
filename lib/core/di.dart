@@ -31,6 +31,9 @@ import '../services/backup_service.dart';
 import '../services/markdown_export_service.dart';
 import '../services/pdf_export_service.dart';
 import '../services/app_lock_service.dart';
+import '../services/url_analysis_settings_service.dart';
+import '../services/youtube_transcript_service.dart';
+import '../services/url_analysis_service.dart';
 import '../services/theme_service.dart';
 import '../services/url_metadata_service.dart';
 
@@ -125,6 +128,28 @@ final markdownExportServiceProvider = Provider<MarkdownExportService>((ref) {
 final pdfExportServiceProvider = Provider<PdfExportService>((ref) {
   return PdfExportService();
 }, name: 'pdfExportServiceProvider');
+
+/// UrlAnalysisSettingsService: liest/schreibt URL-Analyse-Konfiguration.
+final urlAnalysisSettingsServiceProvider =
+    Provider<UrlAnalysisSettingsService>((ref) {
+  return UrlAnalysisSettingsService();
+}, name: 'urlAnalysisSettingsServiceProvider');
+
+/// YoutubeTranscriptService: lädt Transkripte von YouTube-Videos.
+final youtubeTranscriptServiceProvider =
+    Provider<YoutubeTranscriptService>((ref) {
+  return YoutubeTranscriptService();
+}, name: 'youtubeTranscriptServiceProvider');
+
+/// UrlAnalysisService: orchestriert die KI-Analyse neu erfasster Link-Einträge.
+final urlAnalysisServiceProvider = Provider<UrlAnalysisService>((ref) {
+  return UrlAnalysisService(
+    ai: ref.watch(aiEnrichServiceProvider),
+    settings: ref.watch(urlAnalysisSettingsServiceProvider),
+    transcript: ref.watch(youtubeTranscriptServiceProvider),
+    entryRepo: ref.watch(entryRepositoryProvider),
+  );
+}, name: 'urlAnalysisServiceProvider');
 
 /// ThemeService: liest/schreibt Theme-Einstellung als JSON.
 final themeServiceProvider = Provider<ThemeService>((ref) {

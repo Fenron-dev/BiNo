@@ -7,6 +7,7 @@
 // MUSTER: StateNotifier via Riverpod StateNotifierProvider.
 // PHASE: 1 – Text. Phase 2: Bild + URL.
 
+import 'dart:async' show unawaited;
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +17,7 @@ import '../../core/di.dart';
 import '../../data/repositories/entry_repository.dart';
 import '../../data/repositories/attachment_repository.dart';
 import '../../data/db/tables/entries.dart';
+import '../../services/url_analysis_service.dart';
 import '../../services/url_metadata_service.dart';
 
 /// Unveränderlicher Zustand des Capture-Sheets.
@@ -75,16 +77,19 @@ class CaptureController extends StateNotifier<CaptureState> {
   final EntryRepository _entryRepo;
   final AttachmentRepository _attachmentRepo;
   final UrlMetadataService _urlService;
+  final UrlAnalysisService _urlAnalysis;
   final ImagePicker _picker;
 
   CaptureController({
     required EntryRepository entryRepo,
     required AttachmentRepository attachmentRepo,
     required UrlMetadataService urlService,
+    required UrlAnalysisService urlAnalysis,
     ImagePicker? picker,
   })  : _entryRepo = entryRepo,
         _attachmentRepo = attachmentRepo,
         _urlService = urlService,
+        _urlAnalysis = urlAnalysis,
         _picker = picker ?? ImagePicker(),
         super(const CaptureState());
 
@@ -210,6 +215,17 @@ class CaptureController extends StateNotifier<CaptureState> {
       });
       await Future.wait(imageFutures);
 
+      // URL-Analyse im Hintergrund (fire-and-forget).
+      // Läuft nach Sheet-Close weiter; Ergebnis landet in entry.notes.
+      if (type == EntryType.link && sourceUrl != null) {
+        unawaited(_urlAnalysis.analyzeAndUpdateEntry(
+          entryId: entryId,
+          url: sourceUrl,
+          title: state.detectedUrl?.title,
+          description: state.detectedUrl?.description,
+        ));
+      }
+
       state = const CaptureState(); // Reset.
       return true;
     } catch (e, st) {
@@ -245,5 +261,6 @@ final captureControllerProvider =
     entryRepo: ref.watch(entryRepositoryProvider),
     attachmentRepo: ref.watch(attachmentRepositoryProvider),
     urlService: ref.watch(urlMetadataServiceProvider),
+    urlAnalysis: ref.watch(urlAnalysisServiceProvider),
   );
 }, name: 'captureControllerProvider');

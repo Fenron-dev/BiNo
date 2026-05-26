@@ -150,6 +150,21 @@ class AiEnrichService {
     return _callAnthropic(prompt);
   }
 
+  /// Öffentliche Einstiegsmethode für externe Dienste (z. B. UrlAnalysisService).
+  ///
+  /// [providerOverride] erlaubt die Nutzung eines anderen Providers als dem
+  /// konfigurierten Enrichment-Provider. Nutzt trotzdem die gespeicherten
+  /// API-Keys / Basis-URLs aus AiSettingsService.
+  Future<String> callPrompt(
+    String prompt, {
+    String? providerOverride,
+  }) async {
+    final provider = providerOverride ?? await _settings.getProvider();
+    if (provider == kProviderOpenRouter) return _callOpenRouter(prompt);
+    if (provider == kProviderOllama) return _callOllama(prompt);
+    return _callAnthropic(prompt);
+  }
+
   // ── Öffentliche Aktionen ──────────────────────────────────────────────────
 
   Future<String> summarize(String content) => _call(
