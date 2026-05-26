@@ -90,6 +90,12 @@ dependencies:
   # pdf: typsichere PDF-Erstellung in reinem Dart (kein nativer Code nötig).
   pdf: ^3.11.1
 
+  # ─── Homescreen-Widget ────────────────────────────────────────────────────
+  # home_widget: Flutter ↔ Android AppWidget Datenaustausch via SharedPreferences.
+  # Kein native Code für den Datentransfer nötig; nur der AppWidgetProvider (Kotlin)
+  # liest SharedPreferences aus und aktualisiert das Widget-Layout.
+  home_widget: ^0.9.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Layout für das BiNo Homescreen-Widget.
+    Verwendet nur RemoteViews-kompatible Views (kein ConstraintLayout auf API <31,
+    kein RecyclerView, keine Custom Views).
+    Farben sind hartcodiert passend zum Material-You-Dark-Theme der App.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp"
+    android:background="#1C1B1F">
+
+    <!-- Kopfzeile: App-Name + Capture-Button -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <!-- App-Name -->
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="BiNo"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif-medium"/>
+
+        <!-- Neue Notiz Button -->
+        <TextView
+            android:id="@+id/widget_capture_btn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="＋ Notiz"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:background="#6750A4"
+            android:paddingLeft="12dp"
+            android:paddingRight="12dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"/>
+
+    </LinearLayout>
+
+    <!-- Trennlinie -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:background="#3A3A3A"/>
+
+    <!-- Letzter Eintrag – Vorschau -->
+    <TextView
+        android:id="@+id/widget_preview"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:text="Tippe auf ＋ Notiz um loszulegen"
+        android:textColor="#B0B0B0"
+        android:textSize="12sp"
+        android:maxLines="3"
+        android:ellipsize="end"
+        android:fontFamily="sans-serif"/>
+
+    <!-- Zeitstempel letzter Eintrag -->
+    <TextView
+        android:id="@+id/widget_timestamp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text=""
+        android:textColor="#666666"
+        android:textSize="10sp"/>
+
+</LinearLayout>

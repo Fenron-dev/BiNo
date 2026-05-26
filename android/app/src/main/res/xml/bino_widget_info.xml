@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Widget-Metadaten für den BiNo Homescreen-Widget.
+    minWidth/minHeight entsprechen ca. 3×2 Zellen auf einem Standard-Launcher.
+    updatePeriodMillis = 1800000 → alle 30 Minuten (Android-Minimum: 1800000 ms).
+    Die tatsächliche Aktualisierung erfolgt via HomeWidget.updateWidget() aus Flutter,
+    damit Daten sofort nach Erstellen eines neuen Eintrags frisch sind.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/bino_widget"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:description="@string/widget_description"/>

@@ -109,6 +109,21 @@
             </intent-filter>
         </receiver>
 
+        <!-- Homescreen-Widget: AppWidgetProvider für das BiNo-Widget.
+             android:exported="true" ist Pflicht, damit der Launcher das Widget
+             einbinden und aktualisieren darf. -->
+        <receiver
+            android:name=".BiNoWidgetProvider"
+            android:exported="true"
+            android:label="BiNo Widget">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/bino_widget_info"/>
+        </receiver>
+
         <!-- Flutter-Embedding-Metadaten -->
         <meta-data
             android:name="flutterEmbedding"

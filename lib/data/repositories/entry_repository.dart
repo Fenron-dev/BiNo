@@ -7,6 +7,8 @@
 // PHASE: 1 – createEntry + watchAllEntries. Phase 2+ fügt updateEntry,
 //        deleteEntry, Embedding-Trigger und OCR-Verarbeitung hinzu.
 
+import 'dart:async' show unawaited;
+
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
@@ -16,6 +18,7 @@ import '../db/daos/tag_dao.dart';
 import '../db/tables/entries.dart';
 import '../repositories/attachment_repository.dart';
 import '../../domain/tag_parser.dart';
+import '../../services/home_widget_service.dart';
 
 /// Repository für Einträge.
 ///
@@ -96,6 +99,9 @@ class EntryRepository {
       // Schritt 2: Tags aus dem Body parsen und verknüpfen.
       await _syncTagsForEntry(id: id, body: body);
     });
+
+    // Widget nach jedem neuen Eintrag aktualisieren (fire-and-forget).
+    unawaited(HomeWidgetService.update(body: body, createdAt: now));
 
     return id;
   }

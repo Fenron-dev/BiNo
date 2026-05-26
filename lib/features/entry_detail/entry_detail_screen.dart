@@ -334,8 +334,11 @@ class _EntryView extends ConsumerWidget {
               entry.title!,
               style: theme.textTheme.headlineSmall,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
           ],
+
+          // Status + Erinnerung (Metadaten-Chips)
+          _MetaChipsRow(entry: entry),
 
           // Body – [[Wikilinks]] werden als tappbare Spans gerendert.
           if (entry.body.isNotEmpty)
@@ -493,6 +496,89 @@ class _EntryView extends ConsumerWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+// ── Metadaten-Chips (Status + Erinnerung) ─────────────────────────────────────
+
+/// Zeigt Status-Chip und/oder Erinnerungs-Chip falls relevant.
+/// Versteckt sich vollständig, wenn beides leer ist.
+class _MetaChipsRow extends StatelessWidget {
+  final Entry entry;
+
+  const _MetaChipsRow({required this.entry});
+
+  static const _kStatusMeta = {
+    'active': (Icons.play_circle_outline, 'Aktiv'),
+    'done': (Icons.check_circle_outline, 'Fertig'),
+    'archived': (Icons.archive_outlined, 'Archiviert'),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final statusMeta = _kStatusMeta[entry.status];
+    final reminder = entry.reminderAt;
+
+    if (statusMeta == null && reminder == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        children: [
+          if (statusMeta != null)
+            _chip(
+              context: context,
+              icon: statusMeta.$1,
+              label: statusMeta.$2,
+              bg: cs.secondaryContainer,
+              fg: cs.onSecondaryContainer,
+            ),
+          if (reminder != null)
+            _chip(
+              context: context,
+              icon: Icons.notifications_outlined,
+              label: DateFormat('dd.MM.yyyy, HH:mm', 'de_DE')
+                  .format(reminder.toLocal()),
+              bg: cs.tertiaryContainer,
+              fg: cs.onTertiaryContainer,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chip({
+    required BuildContext context,
+    required IconData icon,
+    required String label,
+    required Color bg,
+    required Color fg,
+  }) {
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: fg),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: theme.textTheme.labelSmall?.copyWith(color: fg),
+            ),
+          ],
+        ),
       ),
     );
   }
