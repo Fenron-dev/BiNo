@@ -16,6 +16,8 @@ import 'package:uuid/uuid.dart';
 
 import '../../core/di.dart';
 import '../../data/db/database.dart' hide Container;
+import '../../services/ai_settings_service.dart'
+    show kProviderOpenRouter, kProviderOllama;
 import '../../data/db/tables/property_definitions.dart';
 
 /// Öffnet das KI-Anreicherungs-Sheet für [entry] als modales Bottom-Sheet.
@@ -67,19 +69,34 @@ class _AiEnrichSheetState extends ConsumerState<_AiEnrichSheet> {
     return parts.join('\n\n');
   }
 
-  // Prüft ob ein API-Key gesetzt ist und zeigt ggf. einen Hinweis-Dialog.
+  // Prüft ob der aktive Provider konfiguriert ist und zeigt ggf. einen Hinweis-Dialog.
   Future<bool> _hasApiKey() async {
-    final key = await ref.read(aiSettingsServiceProvider).getApiKey();
-    if (key != null) return true;
+    final s = ref.read(aiSettingsServiceProvider);
+    final provider = await s.getProvider();
+
+    bool configured;
+    String hint;
+
+    if (provider == kProviderOllama) {
+      configured = true;
+      hint = '';
+    } else if (provider == kProviderOpenRouter) {
+      final key = await s.getOpenRouterKey();
+      configured = key != null;
+      hint = 'Bitte trage deinen OpenRouter-API-Key in den Einstellungen ein.';
+    } else {
+      final key = await s.getAnthropicKey();
+      configured = key != null;
+      hint = 'Bitte trage deinen Anthropic-API-Key in den Einstellungen ein.';
+    }
+
+    if (configured) return true;
     if (!mounted) return false;
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('API-Key fehlt'),
-        content: const Text(
-          'Bitte trage deinen Anthropic-API-Key '
-          'in den Einstellungen ein.',
-        ),
+        content: Text(hint),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
